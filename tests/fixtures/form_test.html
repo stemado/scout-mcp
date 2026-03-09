@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head><title>Form Test Page</title></head>
+<body>
+  <h1>Form Test</h1>
+
+  <form id="test-form">
+    <input type="text" id="name" placeholder="Name" />
+    <input type="date" id="date" />
+    <input type="time" id="time" />
+    <input type="datetime-local" id="datetime" />
+    <input type="month" id="month" />
+    <input type="week" id="week" />
+    <button type="submit" id="submit-btn">Submit</button>
+  </form>
+
+  <div id="result"></div>
+  <div id="events"></div>
+
+  <!-- Non-submit button for testing click warning differentiation -->
+  <button id="noop-btn">Do Nothing</button>
+
+  <script>
+    // Track form submission
+    document.getElementById('test-form').addEventListener('submit', function(e) {
+      e.preventDefault();
+      document.getElementById('result').textContent = JSON.stringify({
+        name: document.getElementById('name').value,
+        date: document.getElementById('date').value,
+        time: document.getElementById('time').value,
+        datetime: document.getElementById('datetime').value,
+        month: document.getElementById('month').value,
+        week: document.getElementById('week').value
+      });
+    });
+
+    // Track input/change events on constrained inputs
+    ['date', 'time', 'datetime', 'month', 'week'].forEach(function(id) {
+      var el = document.getElementById(id);
+      el.addEventListener('input', function() {
+        var events = document.getElementById('events');
+        events.textContent += id + ':input ';
+      });
+      el.addEventListener('change', function() {
+        var events = document.getElementById('events');
+        events.textContent += id + ':change ';
+      });
+    });
+  </script>
+</body>
+</html>

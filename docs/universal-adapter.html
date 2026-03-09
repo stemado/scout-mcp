@@ -1,0 +1,1063 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scout — The Universal Adapter</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #080b14;
+    --surface: #111827;
+    --border: #1e293b;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --dim: #334155;
+    --scout: #f97316;
+    --scout-glow: rgba(249, 115, 22, 0.15);
+    --legacy: #64748b;
+    --legacy-active: #94a3b8;
+    --modern: #38bdf8;
+    --modern-glow: rgba(56, 189, 248, 0.12);
+    --green: #34d399;
+    --red: #f87171;
+    --yellow: #fbbf24;
+    --serif: 'Instrument Serif', Georgia, serif;
+    --sans: 'DM Sans', -apple-system, sans-serif;
+    --connector: #475569;
+    --flow: var(--scout);
+  }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+  }
+
+  /* ── Atmosphere ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 60% 50% at 50% 45%, rgba(249, 115, 22, 0.03) 0%, transparent 70%),
+      radial-gradient(ellipse 40% 40% at 20% 50%, rgba(56, 189, 248, 0.02) 0%, transparent 60%),
+      radial-gradient(ellipse 40% 40% at 80% 50%, rgba(100, 116, 139, 0.02) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ══════════════════════════════════════════
+     LAYOUT
+     ══════════════════════════════════════════ */
+  .container {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    padding: 32px 48px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  /* ── Back link ── */
+  .back-link {
+    position: fixed;
+    top: 24px;
+    left: 32px;
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 0.8rem;
+    font-family: var(--sans);
+    z-index: 10;
+    transition: color 0.2s;
+  }
+  .back-link:hover { color: var(--text); }
+
+  /* ── Title area ── */
+  .title-area {
+    text-align: center;
+    margin-bottom: 20px;
+    opacity: 0;
+    animation: fadeUp 0.8s ease 0.2s forwards;
+  }
+  .title-logo {
+    font-family: var(--sans);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .title-main {
+    font-family: var(--serif);
+    font-size: 2rem;
+    font-weight: 400;
+    color: var(--text);
+    line-height: 1.2;
+  }
+  .title-main em {
+    color: var(--scout);
+    font-style: italic;
+  }
+
+  /* ══════════════════════════════════════════
+     THE STAGE — Central diagram area
+     ══════════════════════════════════════════ */
+  .stage {
+    position: relative;
+    width: 100%;
+    max-width: 960px;
+    height: 340px;
+    flex-shrink: 0;
+    opacity: 0;
+    animation: fadeUp 0.8s ease 0.5s forwards;
+  }
+
+  /* ── System nodes ── */
+  .node {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 64px;
+    transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .node-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 14px;
+    border: 1.5px solid var(--border);
+    background: var(--surface);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+  }
+
+  .node-label {
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--muted);
+    text-align: center;
+    white-space: nowrap;
+    transition: all 0.6s ease;
+  }
+
+  /* Legacy portal nodes (right side — the target websites) */
+  .node.legacy { opacity: 0; transform: translateX(20px); }
+  .node.legacy .node-icon { border-color: var(--dim); }
+
+  .node.legacy.active {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  .node.legacy.active .node-icon {
+    border-color: var(--legacy-active);
+    box-shadow: 0 0 20px rgba(148, 163, 184, 0.08);
+  }
+  .node.legacy.active .node-label { color: var(--legacy-active); }
+
+  /* Legacy glitch state (Phase IV) */
+  .node.legacy.glitch .node-icon {
+    animation: glitchShake 0.6s ease 0s 3;
+    border-color: var(--red);
+    box-shadow: 0 0 24px rgba(248, 113, 113, 0.15);
+  }
+  .node.legacy.glitch .node-label { color: var(--red); }
+
+  .node.legacy.repaired .node-icon {
+    border-color: var(--green);
+    box-shadow: 0 0 20px rgba(52, 211, 153, 0.12);
+    animation: none;
+  }
+  .node.legacy.repaired .node-label { color: var(--green); }
+
+  /* Modern system nodes (left side — the demand/trigger side) */
+  .node.modern { opacity: 0; transform: translateX(-20px); }
+  .node.modern .node-icon { border-color: var(--dim); }
+
+  .node.modern.active {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  .node.modern.active .node-icon {
+    border-color: var(--modern);
+    box-shadow: 0 0 20px var(--modern-glow);
+  }
+  .node.modern.active .node-label { color: var(--modern); }
+
+  /* ── Scout hub (center) ── */
+  .scout-hub {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .scout-icon {
+    width: 80px;
+    height: 80px;
+    border-radius: 20px;
+    border: 2px solid var(--scout);
+    background: var(--surface);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--sans);
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--scout);
+    letter-spacing: 1px;
+    box-shadow: 0 0 40px var(--scout-glow);
+    transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+  }
+
+  /* Pulsing ring behind Scout */
+  .scout-icon::before {
+    content: '';
+    position: absolute;
+    inset: -8px;
+    border-radius: 24px;
+    border: 1px solid var(--scout);
+    opacity: 0;
+    animation: scoutPulse 3s ease-in-out infinite;
+  }
+
+  .scout-sub {
+    font-size: 0.65rem;
+    font-weight: 500;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    transition: all 0.6s ease;
+  }
+
+  /* Scout hidden for problem phase */
+  .scout-hub.dimmed {
+    opacity: 0.06;
+    pointer-events: none;
+    filter: grayscale(1);
+  }
+  .scout-hub.dimmed .scout-icon::before {
+    animation: none;
+    opacity: 0;
+  }
+
+  /* Manual path — dashed line showing tedious manual workflow */
+  .manual-path {
+    fill: none;
+    stroke: var(--red);
+    stroke-width: 1.5;
+    stroke-dasharray: 6 4;
+    stroke-linecap: round;
+    opacity: 0;
+    transition: opacity 0.8s ease;
+  }
+  .manual-path.active {
+    opacity: 0.5;
+    animation: manualPulse 2.5s ease-in-out infinite;
+  }
+
+  @keyframes manualPulse {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 0.6; }
+  }
+
+  /* Time cost stat that appears during problem phase */
+  .time-stat {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    opacity: 0;
+    transition: opacity 0.8s ease 0.3s;
+    z-index: 6;
+    pointer-events: none;
+  }
+  .time-stat.active { opacity: 1; }
+  .time-stat-number {
+    font-family: var(--sans);
+    font-size: 2.8rem;
+    font-weight: 600;
+    color: var(--red);
+    line-height: 1;
+    letter-spacing: -1px;
+  }
+  .time-stat-unit {
+    font-family: var(--sans);
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-top: 4px;
+  }
+
+  /* Scout grows in Phase III (shifted indices: now phase-4 and phase-5) */
+  .stage.phase-4 .scout-icon,
+  .stage.phase-5 .scout-icon {
+    width: 90px;
+    height: 90px;
+    border-radius: 22px;
+    font-size: 0.85rem;
+  }
+  .stage.phase-4 .scout-sub,
+  .stage.phase-5 .scout-sub {
+    color: var(--scout);
+    font-size: 0.7rem;
+  }
+
+  /* ── SVG Connectors ── */
+  .connectors {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+  }
+  .connectors svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  .connector-line {
+    fill: none;
+    stroke: var(--connector);
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    opacity: 0;
+    transition: opacity 0.6s ease, stroke 0.6s ease, stroke-width 0.6s ease;
+  }
+  .connector-line.active {
+    opacity: 0.5;
+  }
+  .connector-line.flowing {
+    stroke: var(--scout);
+    stroke-width: 2;
+    opacity: 0.8;
+    filter: drop-shadow(0 0 4px var(--scout-glow));
+  }
+  .connector-line.glitch {
+    stroke: var(--red);
+    stroke-width: 2;
+    opacity: 0.9;
+    filter: drop-shadow(0 0 6px rgba(248, 113, 113, 0.3));
+  }
+  .connector-line.repaired {
+    stroke: var(--green);
+    stroke-width: 2;
+    opacity: 0.8;
+    filter: drop-shadow(0 0 4px rgba(52, 211, 153, 0.2));
+  }
+
+  /* Data flow dots along connectors */
+  .flow-dot {
+    fill: var(--scout);
+    opacity: 0;
+    r: 3;
+    transition: opacity 0.4s ease;
+  }
+  .flow-dot.active {
+    opacity: 1;
+  }
+
+  /* ── User/Schedule icon (left-side context) ── */
+  .context-icon {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.6s ease;
+    opacity: 0;
+  }
+  .context-icon.active { opacity: 1; }
+  .context-icon .ctx-symbol {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: 1.5px solid var(--dim);
+    background: var(--surface);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    transition: all 0.6s ease;
+  }
+  .context-icon.active .ctx-symbol {
+    border-color: var(--muted);
+  }
+  .context-icon .ctx-label {
+    font-size: 0.65rem;
+    color: var(--muted);
+  }
+
+  /* ══════════════════════════════════════════
+     CAPTION AREA
+     ══════════════════════════════════════════ */
+  .caption-area {
+    text-align: center;
+    margin-top: 24px;
+    min-height: 120px;
+    opacity: 0;
+    animation: fadeUp 0.8s ease 0.8s forwards;
+  }
+
+  .phase-label {
+    font-family: var(--sans);
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--scout);
+    margin-bottom: 10px;
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+  }
+  .phase-label.active {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .headline {
+    font-family: var(--serif);
+    font-size: 1.8rem;
+    font-weight: 400;
+    color: var(--text);
+    line-height: 1.3;
+    margin-bottom: 12px;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.6s ease 0.1s, transform 0.6s ease 0.1s;
+  }
+  .headline.active {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .subcaption {
+    font-size: 0.9rem;
+    font-weight: 300;
+    color: var(--muted);
+    line-height: 1.6;
+    max-width: 560px;
+    margin: 0 auto;
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity 0.5s ease 0.25s, transform 0.5s ease 0.25s;
+  }
+  .subcaption.active {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* ══════════════════════════════════════════
+     PHASE DOTS
+     ══════════════════════════════════════════ */
+  .phase-dots {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 28px;
+    opacity: 0;
+    animation: fadeUp 0.8s ease 1s forwards;
+  }
+  .phase-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 1.5px solid var(--dim);
+    background: transparent;
+    cursor: pointer;
+    transition: all 0.4s ease;
+    position: relative;
+  }
+  .phase-dot:hover { border-color: var(--muted); }
+  .phase-dot.active {
+    border-color: var(--scout);
+    background: var(--scout);
+    box-shadow: 0 0 10px var(--scout-glow);
+  }
+  .phase-dot.completed {
+    border-color: var(--green);
+    background: var(--green);
+  }
+  .phase-dot-label {
+    position: absolute;
+    bottom: -20px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.55rem;
+    color: var(--dim);
+    white-space: nowrap;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: color 0.3s ease;
+  }
+  .phase-dot.active .phase-dot-label { color: var(--scout); }
+  .phase-dot.completed .phase-dot-label { color: var(--green); }
+
+  /* ── Replay button ── */
+  .replay-btn {
+    position: fixed;
+    bottom: 28px;
+    right: 32px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 16px;
+    color: var(--muted);
+    font-family: var(--sans);
+    font-size: 0.75rem;
+    cursor: pointer;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.3s ease;
+    z-index: 10;
+  }
+  .replay-btn.visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .replay-btn:hover {
+    border-color: var(--scout);
+    color: var(--scout);
+  }
+
+  /* ══════════════════════════════════════════
+     KEYFRAMES
+     ══════════════════════════════════════════ */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes scoutPulse {
+    0%, 100% { opacity: 0; transform: scale(1); }
+    50% { opacity: 0.2; transform: scale(1.08); }
+  }
+
+  @keyframes glitchShake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-3px) rotate(-1deg); }
+    40% { transform: translateX(3px) rotate(1deg); }
+    60% { transform: translateX(-2px); }
+    80% { transform: translateX(2px); }
+  }
+
+  @keyframes dotTravel {
+    0% { offset-distance: 0%; opacity: 0; }
+    5% { opacity: 1; }
+    95% { opacity: 1; }
+    100% { offset-distance: 100%; opacity: 0; }
+  }
+
+  /* ══════════════════════════════════════════
+     RESPONSIVE
+     ══════════════════════════════════════════ */
+  @media (max-width: 768px) {
+    .container { padding: 24px 20px; }
+    .title-main { font-size: 1.5rem; }
+    .headline { font-size: 1.4rem; }
+    .stage { height: 280px; }
+    .node { width: 50px; }
+    .node-icon { width: 50px; height: 50px; font-size: 1.2rem; border-radius: 12px; }
+    .scout-icon { width: 64px; height: 64px; font-size: 0.9rem; }
+    .node-label { font-size: 0.6rem; }
+    .context-icon .ctx-symbol { width: 40px; height: 40px; font-size: 1.1rem; }
+  }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="phase-theater.html">&larr; Technical Demo</a>
+<button class="replay-btn" id="replay-btn">&#8635; Watch Again</button>
+
+<div class="container">
+
+  <!-- Title -->
+  <div class="title-area">
+    <div class="title-logo">Scout</div>
+    <h1 class="title-main">The <em>Universal Adapter</em> for Legacy Systems</h1>
+  </div>
+
+  <!-- Stage -->
+  <div class="stage" id="stage">
+
+    <!-- SVG Connectors Layer -->
+    <div class="connectors">
+      <svg viewBox="0 0 960 340" preserveAspectRatio="xMidYMid meet">
+        <!-- Manual workflow path (Problem phase — direct, broken path from user to portal) -->
+        <path id="manual-path" class="manual-path" d="M 120,170 C 250,170 350,200 480,210 C 610,220 700,170 810,170" />
+
+        <!-- Left connectors: User/Modern → Scout -->
+        <path id="conn-l1" class="connector-line" d="M 150,170 C 260,170 340,170 430,170" />
+        <path id="conn-l2" class="connector-line" d="M 150,48 C 260,48 340,110 430,155" />
+        <path id="conn-l3" class="connector-line" d="M 150,292 C 260,292 340,230 430,185" />
+
+        <!-- Right connectors: Scout → Legacy portals -->
+        <path id="conn-r1" class="connector-line" d="M 530,170 C 640,170 720,170 810,170" />
+        <path id="conn-r2" class="connector-line" d="M 530,155 C 640,110 720,48 810,48" />
+        <path id="conn-r3" class="connector-line" d="M 530,185 C 640,230 720,292 810,292" />
+
+        <!-- Animated flow dots -->
+        <circle class="flow-dot" id="dot-l1"><animateMotion dur="2s" repeatCount="indefinite" path="M 150,170 C 260,170 340,170 430,170" /></circle>
+        <circle class="flow-dot" id="dot-l2"><animateMotion dur="2.3s" repeatCount="indefinite" path="M 150,48 C 260,48 340,110 430,155" /></circle>
+        <circle class="flow-dot" id="dot-l3"><animateMotion dur="2.1s" repeatCount="indefinite" path="M 150,292 C 260,292 340,230 430,185" /></circle>
+
+        <circle class="flow-dot" id="dot-r1"><animateMotion dur="1.8s" repeatCount="indefinite" path="M 530,170 C 640,170 720,170 810,170" /></circle>
+        <circle class="flow-dot" id="dot-r2"><animateMotion dur="2.2s" repeatCount="indefinite" path="M 530,155 C 640,110 720,48 810,48" /></circle>
+        <circle class="flow-dot" id="dot-r3"><animateMotion dur="2s" repeatCount="indefinite" path="M 530,185 C 640,230 720,292 810,292" /></circle>
+      </svg>
+    </div>
+
+    <!-- Context icons: You / Schedule (left side — the trigger) -->
+    <div class="context-icon" id="ctx-user" style="left: 60px; top: calc(50% - 24px);">
+      <div class="ctx-symbol">&#128100;</div>
+      <div class="ctx-label">You</div>
+    </div>
+    <div class="context-icon" id="ctx-schedule" style="left: 60px; top: calc(50% - 24px);">
+      <div class="ctx-symbol">&#128337;</div>
+      <div class="ctx-label">Schedule</div>
+    </div>
+
+    <!-- Modern Systems (left side — demand/consumers) -->
+    <div class="node modern" id="modern-1" style="left: 80px; top: calc(50% - 32px);">
+      <div class="node-icon">&#9881;</div>
+      <div class="node-label">ERP System</div>
+    </div>
+    <div class="node modern" id="modern-2" style="left: 80px; top: calc(14% - 32px);">
+      <div class="node-icon">&#128176;</div>
+      <div class="node-label">Payroll</div>
+    </div>
+    <div class="node modern" id="modern-3" style="left: 80px; top: calc(86% - 32px);">
+      <div class="node-icon">&#128187;</div>
+      <div class="node-label">Custom App</div>
+    </div>
+
+    <!-- Time cost stat (appears center-stage during Problem phase, replacing Scout) -->
+    <div class="time-stat" id="time-stat">
+      <div class="time-stat-number">17 hrs</div>
+      <div class="time-stat-unit">per year · per report</div>
+    </div>
+
+    <!-- Scout Hub (center) -->
+    <div class="scout-hub">
+      <div class="scout-icon" id="scout-icon">Scout</div>
+      <div class="scout-sub" id="scout-sub">adapter</div>
+    </div>
+
+    <!-- Legacy Portals (right side — the target websites) -->
+    <div class="node legacy" id="legacy-1" style="right: 80px; top: calc(50% - 32px);">
+      <div class="node-icon">
+        <svg viewBox="0 0 36 28" width="36" height="28" fill="none">
+          <rect x=".5" y=".5" width="35" height="27" rx="3" stroke="#64748b" stroke-width=".75"/>
+          <line x1=".5" y1="7" x2="35.5" y2="7" stroke="#64748b" stroke-width=".5"/>
+          <circle cx="4.5" cy="3.5" r="1.2" fill="#f87171" opacity=".6"/>
+          <circle cx="8.5" cy="3.5" r="1.2" fill="#fbbf24" opacity=".6"/>
+          <circle cx="12.5" cy="3.5" r="1.2" fill="#34d399" opacity=".6"/>
+          <rect x="4" y="10" width="28" height="1.5" rx=".75" fill="#334155"/>
+          <rect x="4" y="14" width="22" height="1.5" rx=".75" fill="#334155"/>
+          <rect x="4" y="18" width="26" height="1.5" rx=".75" fill="#334155"/>
+          <rect x="4" y="22" width="18" height="1.5" rx=".75" fill="#334155"/>
+        </svg>
+      </div>
+      <div class="node-label">HR Portal</div>
+    </div>
+    <div class="node legacy" id="legacy-2" style="right: 80px; top: calc(14% - 32px);">
+      <div class="node-icon">
+        <svg viewBox="0 0 36 28" width="36" height="28" fill="none">
+          <rect x=".5" y=".5" width="35" height="27" rx="3" stroke="#64748b" stroke-width=".75"/>
+          <line x1=".5" y1="7" x2="35.5" y2="7" stroke="#64748b" stroke-width=".5"/>
+          <circle cx="4.5" cy="3.5" r="1.2" fill="#f87171" opacity=".6"/>
+          <circle cx="8.5" cy="3.5" r="1.2" fill="#fbbf24" opacity=".6"/>
+          <circle cx="12.5" cy="3.5" r="1.2" fill="#34d399" opacity=".6"/>
+          <rect x="4" y="10" width="13" height="6" rx="1" fill="#334155"/>
+          <rect x="19" y="10" width="13" height="6" rx="1" fill="#334155"/>
+          <rect x="4" y="18.5" width="13" height="6" rx="1" fill="#334155"/>
+          <rect x="19" y="18.5" width="13" height="6" rx="1" fill="#334155"/>
+        </svg>
+      </div>
+      <div class="node-label">Vendor Dashboard</div>
+    </div>
+    <div class="node legacy" id="legacy-3" style="right: 80px; top: calc(86% - 32px);">
+      <div class="node-icon">
+        <svg viewBox="0 0 36 28" width="36" height="28" fill="none">
+          <rect x=".5" y=".5" width="35" height="27" rx="3" stroke="#64748b" stroke-width=".75"/>
+          <line x1=".5" y1="7" x2="35.5" y2="7" stroke="#64748b" stroke-width=".5"/>
+          <circle cx="4.5" cy="3.5" r="1.2" fill="#f87171" opacity=".6"/>
+          <circle cx="8.5" cy="3.5" r="1.2" fill="#fbbf24" opacity=".6"/>
+          <circle cx="12.5" cy="3.5" r="1.2" fill="#34d399" opacity=".6"/>
+          <rect x="4" y="10.5" width="28" height="2" rx="1" fill="#475569"/>
+          <rect x="4" y="15" width="28" height="1.5" rx=".75" fill="#334155"/>
+          <rect x="4" y="19" width="28" height="1.5" rx=".75" fill="#334155"/>
+          <rect x="4" y="23" width="28" height="1.5" rx=".75" fill="#334155"/>
+        </svg>
+      </div>
+      <div class="node-label">Benefits Platform</div>
+    </div>
+  </div>
+
+  <!-- Captions -->
+  <div class="caption-area">
+    <div class="phase-label" id="phase-label"></div>
+    <div class="headline" id="headline"></div>
+    <div class="subcaption" id="subcaption"></div>
+  </div>
+
+  <!-- Phase dots -->
+  <div class="phase-dots" id="phase-dots">
+    <div class="phase-dot" data-phase="0">
+      <span class="phase-dot-label">0</span>
+    </div>
+    <div class="phase-dot" data-phase="1">
+      <span class="phase-dot-label">I</span>
+    </div>
+    <div class="phase-dot" data-phase="2">
+      <span class="phase-dot-label">II</span>
+    </div>
+    <div class="phase-dot" data-phase="3">
+      <span class="phase-dot-label">III</span>
+    </div>
+    <div class="phase-dot" data-phase="4">
+      <span class="phase-dot-label">IV</span>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════
+   PHASE DEFINITIONS
+   ══════════════════════════════════════════════════════════════ */
+
+const phaseData = [
+  {
+    label: 'The Problem',
+    headline: 'Your data is trapped behind a login screen.',
+    subcaption: 'No API. No export endpoint. Just a browser, a password, and 20 minutes of clicking — every single week. That\'s 17 hours a year to fetch one report. Multiply across every portal your team touches.',
+    legacy: [0],
+    modern: [],
+    connectors: { left: [], right: [] },
+    dots: { left: [], right: [] },
+    ctx: 'user',
+    scoutSub: '',
+    hideScout: true,
+    showManualPath: true,
+    showTimeStat: true,
+  },
+  {
+    label: 'Phase I — Plugin',
+    headline: 'Scout learns your portal.',
+    subcaption: 'You describe the task. Scout navigates the portal, handles the login, and brings back the data. Like a universal travel adapter — one tool that fits any outlet.',
+    legacy: [0],        // which legacy nodes are active (index)
+    modern: [],
+    connectors: { left: [0], right: [0] },
+    dots: { left: [0], right: [0] },
+    ctx: 'user',
+    scoutSub: 'adapter',
+  },
+  {
+    label: 'Phase II — Workflows',
+    headline: 'Now it runs without you.',
+    subcaption: 'Set a schedule. Scout runs the same workflow automatically — every day, every week, whenever you need. If something breaks, Scout fixes it.',
+    legacy: [0],
+    modern: [],
+    connectors: { left: [0], right: [0] },
+    dots: { left: [0], right: [0] },
+    ctx: 'schedule',
+    scoutSub: 'engine',
+    flowClass: 'flowing',
+  },
+  {
+    label: 'Phase III — Hosted API',
+    headline: 'Every system gets an API.',
+    subcaption: 'Other systems call Scout directly. They get clean data back — never knowing a browser was involved. Scout becomes the API that legacy systems never built.',
+    legacy: [0, 1, 2],
+    modern: [0, 1, 2],
+    connectors: { left: [0, 1, 2], right: [0, 1, 2] },
+    dots: { left: [0, 1, 2], right: [0, 1, 2] },
+    ctx: null,
+    scoutSub: 'api',
+    flowClass: 'flowing',
+  },
+  {
+    label: 'Phase IV — Adaptive Intelligence',
+    headline: 'Portals change. Scout adapts.',
+    subcaption: 'When a portal updates its interface, Scout detects the change and adapts automatically. Nothing breaks downstream. 1,000 portals. Zero engineers on call.',
+    legacy: [0, 1, 2],
+    modern: [0, 1, 2],
+    connectors: { left: [0, 1, 2], right: [0, 1, 2] },
+    dots: { left: [0, 1, 2], right: [0, 1, 2] },
+    ctx: null,
+    scoutSub: 'intelligence',
+    flowClass: 'flowing',
+    glitchNode: 1,      // legacy-2 glitches
+  },
+];
+
+/* ══════════════════════════════════════════════════════════════
+   CONTROLLER
+   ══════════════════════════════════════════════════════════════ */
+
+const $ = s => document.querySelector(s);
+const $$ = s => document.querySelectorAll(s);
+
+const legacyNodes = [
+  document.getElementById('legacy-1'),
+  document.getElementById('legacy-2'),
+  document.getElementById('legacy-3'),
+];
+const modernNodes = [
+  document.getElementById('modern-1'),
+  document.getElementById('modern-2'),
+  document.getElementById('modern-3'),
+];
+const connLeft = [
+  document.getElementById('conn-l1'),
+  document.getElementById('conn-l2'),
+  document.getElementById('conn-l3'),
+];
+const connRight = [
+  document.getElementById('conn-r1'),
+  document.getElementById('conn-r2'),
+  document.getElementById('conn-r3'),
+];
+const dotsLeft = [
+  document.getElementById('dot-l1'),
+  document.getElementById('dot-l2'),
+  document.getElementById('dot-l3'),
+];
+const dotsRight = [
+  document.getElementById('dot-r1'),
+  document.getElementById('dot-r2'),
+  document.getElementById('dot-r3'),
+];
+
+function wait(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+let currentPhase = -1;
+let playing = false;
+let autoTimer = null;
+
+function clearPhaseVisuals() {
+  // Reset all nodes
+  legacyNodes.forEach(n => {
+    n.classList.remove('active', 'glitch', 'repaired');
+    n.style.transform = '';
+  });
+  modernNodes.forEach(n => n.classList.remove('active'));
+
+  // Reset connectors
+  [...connLeft, ...connRight].forEach(c => {
+    c.classList.remove('active', 'flowing', 'glitch', 'repaired');
+  });
+
+  // Reset dots
+  [...dotsLeft, ...dotsRight].forEach(d => d.classList.remove('active'));
+
+  // Reset context icons
+  $('#ctx-user').classList.remove('active');
+  $('#ctx-schedule').classList.remove('active');
+
+  // Reset manual path and time stat
+  document.getElementById('manual-path').classList.remove('active');
+  document.getElementById('time-stat').classList.remove('active');
+
+  // Reset Scout visibility
+  document.querySelector('.scout-hub').classList.remove('dimmed');
+
+  // Reset captions
+  $('#phase-label').classList.remove('active');
+  $('#headline').classList.remove('active');
+  $('#subcaption').classList.remove('active');
+
+  // Reset stage phase class
+  const stage = $('#stage');
+  stage.className = 'stage';
+}
+
+async function showPhase(index, animate = true) {
+  const phase = phaseData[index];
+  currentPhase = index;
+
+  // Clear everything
+  clearPhaseVisuals();
+
+  // Add stage phase class
+  $('#stage').classList.add(`phase-${index + 1}`);
+
+  // Update phase dots
+  $$('.phase-dot').forEach((dot, i) => {
+    dot.classList.remove('active', 'completed');
+    if (i === index) dot.classList.add('active');
+    else if (i < index) dot.classList.add('completed');
+  });
+
+  if (animate) await wait(200);
+
+  // Show caption
+  $('#phase-label').textContent = phase.label;
+  $('#headline').textContent = phase.headline;
+  $('#subcaption').textContent = phase.subcaption;
+
+  $('#phase-label').classList.add('active');
+  if (animate) await wait(100);
+  $('#headline').classList.add('active');
+  if (animate) await wait(100);
+  $('#subcaption').classList.add('active');
+
+  if (animate) await wait(300);
+
+  // Scout sub-label
+  $('#scout-sub').textContent = phase.scoutSub;
+
+  // Handle Scout visibility — dim during problem phase, visible otherwise
+  if (phase.hideScout) {
+    document.querySelector('.scout-hub').classList.add('dimmed');
+  }
+
+  // Show manual path if this is the problem phase
+  if (phase.showManualPath) {
+    if (animate) await wait(300);
+    document.getElementById('manual-path').classList.add('active');
+  }
+
+  // Show time stat overlay
+  if (phase.showTimeStat) {
+    if (animate) await wait(600);
+    document.getElementById('time-stat').classList.add('active');
+  }
+
+  // Context icon (left side — trigger)
+  if (phase.ctx === 'user') {
+    $('#ctx-user').classList.add('active');
+  } else if (phase.ctx === 'schedule') {
+    $('#ctx-schedule').classList.add('active');
+  }
+
+  if (animate) await wait(150);
+
+  // Activate left connectors (from user/modern → Scout)
+  for (const i of phase.connectors.left) {
+    connLeft[i].classList.add('active');
+    if (phase.flowClass) connLeft[i].classList.add(phase.flowClass);
+    if (animate) await wait(100);
+  }
+
+  // Activate flow dots (left)
+  for (const i of phase.dots.left) {
+    dotsLeft[i].classList.add('active');
+  }
+
+  // Activate modern nodes (left side)
+  for (const i of phase.modern) {
+    modernNodes[i].classList.add('active');
+    if (animate) await wait(150);
+  }
+
+  if (animate) await wait(200);
+
+  // Activate right connectors (Scout → legacy portals)
+  for (const i of phase.connectors.right) {
+    connRight[i].classList.add('active');
+    if (phase.flowClass) connRight[i].classList.add(phase.flowClass);
+    if (animate) await wait(100);
+  }
+
+  // Activate flow dots (right)
+  for (const i of phase.dots.right) {
+    dotsRight[i].classList.add('active');
+  }
+
+  // Activate legacy portal nodes (right side)
+  for (const i of phase.legacy) {
+    legacyNodes[i].classList.add('active');
+    if (animate) await wait(150);
+  }
+
+  // Phase IV: glitch sequence on a legacy portal
+  if (phase.glitchNode !== undefined && animate) {
+    await wait(1500);
+    const gi = phase.glitchNode;
+    legacyNodes[gi].classList.add('glitch');
+    connRight[gi].classList.add('glitch');
+    connRight[gi].classList.remove('flowing');
+
+    await wait(2000);
+
+    legacyNodes[gi].classList.remove('glitch');
+    legacyNodes[gi].classList.add('repaired');
+    connRight[gi].classList.remove('glitch');
+    connRight[gi].classList.add('repaired');
+  }
+}
+
+async function playAll() {
+  playing = true;
+  $('#replay-btn').classList.remove('visible');
+
+  for (let i = 0; i < phaseData.length; i++) {
+    if (!playing) return;
+    await showPhase(i, true);
+    if (!playing) return;
+
+    // Wait before next phase
+    // Problem phase lingers longer; Phase IV has glitch animation
+    const delay = i === 0 ? 6500 : i === 4 ? 3000 : 5500;
+    await wait(delay);
+  }
+
+  playing = false;
+  $('#replay-btn').classList.add('visible');
+}
+
+function jumpToPhase(index) {
+  playing = false;
+  showPhase(index, true);
+}
+
+// Wire phase dots
+$$('.phase-dot').forEach((dot, i) => {
+  dot.addEventListener('click', () => jumpToPhase(i));
+});
+
+// Wire replay
+$('#replay-btn').addEventListener('click', () => {
+  playing = false;
+  setTimeout(() => playAll(), 100);
+});
+
+// Auto-play on load
+setTimeout(() => playAll(), 1200);
+</script>
+</body>
+</html>

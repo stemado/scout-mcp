@@ -1,0 +1,36 @@
+# Scout Benchmark Task Spec
+# Version this file when task definitions change — results files reference
+# the spec version they were run against.
+version: "1.0"
+
+# Number of sequential runs per task (3 for initial validation, 5 for publishable CIs)
+runs_per_task: 3
+
+tasks:
+  - id: T1
+    name: "Fact Lookup (Wikipedia)"
+    target_url: "https://en.wikipedia.org/wiki/Python_(programming_language)"
+    instruction: |
+      Navigate to the Wikipedia article on the Python programming language.
+      Extract the first paragraph of the article summary (the text before the
+      table of contents). Return only the extracted text.
+    # Substring that must appear in extracted_output for success=true
+    expected_output_contains: "Python is a high-level"
+    # Published Playwright MCP comparison baseline (tokens per navigation)
+    playwright_baseline_tokens: 124000
+
+  - id: T2
+    name: "Form Fill + Verification (httpbin)"
+    target_url: "https://httpbin.org/forms/post"
+    instruction: |
+      Navigate to httpbin.org/forms/post. Fill in the form with the following values:
+      - Customer name: "Scout Benchmark"
+      - Telephone: "555-0199"
+      - E-mail: "benchmark@Scout.dev"
+      - Size: Large
+      - Topping: Cheese
+      - Delivery time: "11:45"
+      - Delivery instructions: "Leave at door"
+      Submit the form. Extract and return the full response that httpbin echoes back.
+    expected_output_contains: "\"custname\": \"Scout Benchmark\""
+    playwright_baseline_tokens: 124000

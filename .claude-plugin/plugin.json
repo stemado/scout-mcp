@@ -1,0 +1,11 @@
+{
+  "name": "scout",
+  "version": "0.6.0",
+  "description": "Give Claude a browser. Scout page structure, find elements, interact with websites, and monitor network traffic.",
+  "license": "MIT",
+  "repository": "https://github.com/mtsteinle/scout",
+  "author": {
+    "name": "mtsteinle"
+  },
+  "keywords": ["browser", "automation", "anti-detection", "stealth", "botasaurus"]
+}

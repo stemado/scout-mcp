@@ -1,0 +1,54 @@
+{
+  "meta": {
+    "title": "claude",
+    "loop": true,
+    "pauseBetweenLoops": 3000
+  },
+  "scenes": [
+    {
+      "type": "user",
+      "text": "/scout:scout reddit.com",
+      "delay": 800
+    },
+    {
+      "type": "assistant",
+      "text": "I'll scout reddit.com to map the page structure.",
+      "delay": 400
+    },
+    {
+      "type": "tool",
+      "name": "launch_session",
+      "args": "reddit.com, headed=true",
+      "status": "complete",
+      "delay": 300
+    },
+    {
+      "type": "tool",
+      "name": "scout_page",
+      "args": "reddit.com",
+      "status": "running",
+      "delay": 200
+    },
+    {
+      "type": "tool",
+      "name": "scout_page",
+      "args": "reddit.com",
+      "status": "complete",
+      "delay": 1200
+    },
+    {
+      "type": "assistant",
+      "text": "Found 47 interactive elements across 3 frames.",
+      "delay": 300
+    },
+    {
+      "type": "assistant",
+      "text": "12 buttons, 8 links, 3 inputs. Main content is in the top frame.",
+      "delay": 200
+    },
+    {
+      "type": "clear",
+      "delay": 2000
+    }
+  ]
+}

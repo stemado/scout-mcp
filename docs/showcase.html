@@ -1,0 +1,1402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scout — Stealth Browser Automation MCP</title>
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --green: #3fb950;
+    --cyan: #58a6ff;
+    --yellow: #d29922;
+    --red: #f85149;
+    --orange: #f0883e;
+    --font: 'Cascadia Code', 'Fira Code', 'SF Mono', 'Consolas', monospace;
+  }
+
+  html {
+    font-size: 15px;
+    line-height: 1.55;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    min-height: 100vh;
+    /* Subtle dot grid background for depth */
+    background-image: radial-gradient(circle, rgba(48, 54, 61, 0.4) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  /* ── Page Layout ── */
+  .page {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 48px 24px 80px;
+  }
+
+  /* ── Section Separators ── */
+  .section {
+    margin-top: 80px;
+  }
+  .section-divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border) 20%, var(--border) 80%, transparent);
+    margin-bottom: 48px;
+  }
+  .section-header {
+    font-size: 1.4rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+  .section-subtitle {
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin-bottom: 32px;
+  }
+
+  /* ══════════════════════════════════════════
+     SECTION 1: HEADER
+     ══════════════════════════════════════════ */
+  .header {
+    text-align: center;
+    padding-bottom: 24px;
+  }
+  .header-logo {
+    font-size: 2.2rem;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: var(--text);
+    margin-bottom: 16px;
+  }
+  .header-logo .logo-dot {
+    color: var(--orange);
+  }
+  .header-tagline {
+    font-size: 1.35rem;
+    font-weight: 500;
+    line-height: 1.4;
+    margin-bottom: 20px;
+    background: linear-gradient(135deg, var(--text) 0%, var(--cyan) 50%, var(--orange) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .header-problem {
+    color: var(--muted);
+    font-size: 0.9rem;
+    max-width: 680px;
+    margin: 0 auto;
+    line-height: 1.65;
+  }
+
+  /* ══════════════════════════════════════════
+     SECTION 2: HERO AREA
+     ══════════════════════════════════════════ */
+  .hero {
+    margin-top: 48px;
+    position: relative;
+  }
+  /* Faint glow behind hero */
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 120%;
+    height: 120%;
+    background: radial-gradient(ellipse at center, rgba(88, 166, 255, 0.04) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── Simulated Browser Chrome ── */
+  .browser-chrome {
+    position: relative;
+    z-index: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .browser-titlebar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    background: rgba(13, 17, 23, 0.6);
+    border-bottom: 1px solid var(--border);
+  }
+  .browser-dots {
+    display: flex;
+    gap: 6px;
+  }
+  .browser-dots .dot {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    opacity: 0.75;
+  }
+  .browser-dots .dot.r { background: var(--red); }
+  .browser-dots .dot.y { background: var(--yellow); }
+  .browser-dots .dot.g { background: var(--green); }
+  .browser-url {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 5px 12px;
+    font-size: 0.8rem;
+    color: var(--muted);
+    font-family: var(--font);
+    user-select: none;
+  }
+  .browser-content {
+    min-height: 200px;
+    padding: 24px;
+    position: relative;
+    transition: opacity 0.25s ease;
+  }
+
+  /* ── Claude Response Area ── */
+  .response-area {
+    position: relative;
+    z-index: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-top: 12px;
+    padding: 20px 24px;
+    max-height: 380px;
+    overflow-y: auto;
+    scroll-behavior: smooth;
+  }
+  .response-area::-webkit-scrollbar {
+    width: 6px;
+  }
+  .response-area::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .response-area::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 3px;
+  }
+  .response-line {
+    margin-bottom: 10px;
+    opacity: 0;
+    transform: translateY(4px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+  }
+  .response-line.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* ── Tool Boxes (reused from reference) ── */
+  .tool-box {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin-top: 2px;
+    background: rgba(13, 17, 23, 0.4);
+  }
+  .tool-box-header {
+    color: var(--cyan);
+    font-weight: 600;
+    margin-bottom: 6px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.87rem;
+  }
+  .tool-row {
+    display: flex;
+    gap: 8px;
+    line-height: 1.55;
+    font-size: 0.87rem;
+  }
+  .tool-row .key { color: var(--cyan); min-width: 120px; flex-shrink: 0; }
+  .tool-row .val { color: var(--text); }
+  .tool-callout {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid var(--border);
+    font-size: 0.85rem;
+  }
+
+  /* ── User Input Area ── */
+  .user-input-area {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 20px;
+  }
+  .user-input-prompt {
+    color: var(--muted);
+    font-size: 0.85rem;
+    flex-shrink: 0;
+    user-select: none;
+  }
+  .user-input-text {
+    flex: 1;
+    color: var(--text);
+    font-size: 0.9rem;
+    font-family: var(--font);
+    min-height: 1.4em;
+    position: relative;
+  }
+  .cursor {
+    display: inline-block;
+    width: 8px;
+    height: 1.1em;
+    background: var(--cyan);
+    vertical-align: text-bottom;
+    animation: blink 1s step-end infinite;
+    margin-left: 1px;
+  }
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+
+  /* ── Replay Button ── */
+  .replay-btn {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 10;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 14px;
+    color: var(--muted);
+    font-family: var(--font);
+    font-size: 0.8rem;
+    cursor: pointer;
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: opacity 0.3s ease, transform 0.3s ease, border-color 0.2s ease, color 0.2s ease;
+    pointer-events: none;
+  }
+  .replay-btn.visible {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+  .replay-btn:hover {
+    border-color: var(--cyan);
+    color: var(--cyan);
+  }
+
+  /* ══════════════════════════════════════════
+     SECTION 3: HOW IT WORKS (6 feature cards)
+     ══════════════════════════════════════════ */
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+  .feature-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    cursor: pointer;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    border-left: 3px solid transparent;
+    overflow: hidden;
+  }
+  .feature-card:hover {
+    border-color: var(--cyan);
+    box-shadow: 0 0 20px rgba(88, 166, 255, 0.06);
+  }
+  .feature-card.active {
+    border-left-color: var(--orange);
+  }
+  .feature-card-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+  .feature-card-summary {
+    font-size: 0.82rem;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+  .feature-card-detail {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.35s ease;
+    font-size: 0.82rem;
+    color: var(--muted);
+    line-height: 1.5;
+    margin-top: 0;
+  }
+  .feature-card.active .feature-card-detail {
+    max-height: 300px;
+    margin-top: 12px;
+  }
+
+  /* ══════════════════════════════════════════
+     SECTION 4: WHY OTTO (comparison table)
+     ══════════════════════════════════════════ */
+  .comparison-wrapper { overflow-x: auto; }
+  .comparison-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+  .comparison-table th,
+  .comparison-table td {
+    padding: 12px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  .comparison-table th {
+    color: var(--muted);
+    font-weight: 500;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .comparison-table td {
+    color: var(--text);
+  }
+  /* Scout column highlight */
+  .comparison-table th.scout-col,
+  .comparison-table td.scout-col {
+    background: rgba(240, 136, 62, 0.06);
+  }
+  .comparison-table th.scout-col {
+    color: var(--orange);
+  }
+  .comparison-table tbody tr:hover td {
+    background: rgba(88, 166, 255, 0.03);
+  }
+  .comparison-table tbody tr:hover td.scout-col {
+    background: rgba(240, 136, 62, 0.09);
+  }
+
+  /* ══════════════════════════════════════════
+     SECTION 5: 12 MCP TOOLS (tool cards)
+     ══════════════════════════════════════════ */
+  .tools-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+  }
+  .tool-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 16px;
+    transition: border-color 0.2s ease;
+  }
+  .tool-card:hover {
+    border-color: var(--cyan);
+  }
+  .tool-card-name {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+  .tool-card-desc {
+    font-size: 0.78rem;
+    color: var(--muted);
+    line-height: 1.45;
+  }
+  .tool-badge {
+    display: inline-block;
+    font-size: 0.65rem;
+    padding: 2px 7px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  .tool-badge.session  { background: rgba(63, 185, 80, 0.12); color: var(--green); }
+  .tool-badge.recon    { background: rgba(88, 166, 255, 0.12); color: var(--cyan); }
+  .tool-badge.interaction { background: rgba(240, 136, 62, 0.12); color: var(--orange); }
+  .tool-badge.observation { background: rgba(210, 153, 34, 0.12); color: var(--yellow); }
+
+  /* ══════════════════════════════════════════
+     SECTION 6: GET STARTED (install CTA)
+     ══════════════════════════════════════════ */
+  .cta-area {
+    text-align: center;
+    padding: 40px 0;
+  }
+  .cta-commands {
+    display: inline-block;
+    text-align: left;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px 32px;
+    margin-bottom: 16px;
+  }
+  .cta-links {
+    margin-top: 16px;
+    font-size: 0.85rem;
+  }
+  .cta-links a {
+    color: var(--cyan);
+    text-decoration: none;
+  }
+  .cta-links a:hover { text-decoration: underline; }
+  .cta-links .dim { margin: 0 8px; }
+
+  /* ══════════════════════════════════════════
+     SIMULATED WEBSITE ELEMENTS
+     ══════════════════════════════════════════ */
+  .sim-form {
+    max-width: 320px;
+    margin: 0 auto;
+  }
+  .sim-field {
+    margin-bottom: 14px;
+  }
+  .sim-field label {
+    display: block;
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .sim-input {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 8px 12px;
+    font-family: var(--font);
+    font-size: 0.85rem;
+    color: var(--text);
+  }
+  .sim-btn {
+    background: var(--cyan);
+    color: var(--bg);
+    border: none;
+    border-radius: 4px;
+    padding: 9px 24px;
+    font-family: var(--font);
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-align: center;
+    cursor: default;
+    margin-top: 6px;
+  }
+  .sim-nav {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 16px;
+  }
+  .sim-nav span {
+    padding: 8px 16px;
+    font-size: 0.82rem;
+    color: var(--muted);
+    border-bottom: 2px solid transparent;
+    cursor: default;
+  }
+  .sim-nav span.active {
+    color: var(--text);
+    border-bottom-color: var(--cyan);
+  }
+  .sim-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+  }
+  .sim-table th,
+  .sim-table td {
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  .sim-table th {
+    color: var(--muted);
+    font-weight: 500;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .sim-portal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 12px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .sim-portal-header .portal-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .sim-portal-header .portal-user {
+    font-size: 0.78rem;
+    color: var(--muted);
+  }
+  .sim-file-tree {
+    font-size: 0.85rem;
+    line-height: 1.8;
+  }
+  .sim-file-tree .dir {
+    color: var(--cyan);
+    font-weight: 600;
+  }
+  .sim-file-tree .file {
+    color: var(--text);
+    padding-left: 20px;
+  }
+  .sim-file-tree .file::before {
+    content: '';
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    margin-right: 6px;
+    border-left: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+    position: relative;
+    top: -2px;
+  }
+
+  /* ══════════════════════════════════════════
+     UTILITY CLASSES
+     ══════════════════════════════════════════ */
+  .ok      { color: var(--green); }
+  .str     { color: var(--green); }
+  .cyan    { color: var(--cyan); }
+  .yellow  { color: var(--yellow); }
+  .red     { color: var(--red); }
+  .dim     { color: var(--muted); }
+  .orange  { color: var(--orange); }
+  .redacted {
+    color: var(--red);
+    font-weight: 700;
+    padding: 1px 4px;
+    border-radius: 3px;
+  }
+  .hidden {
+    display: none !important;
+  }
+
+  /* ══════════════════════════════════════════
+     KEYFRAMES
+     ══════════════════════════════════════════ */
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes typeLine {
+    from { opacity: 0; transform: translateX(-3px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  /* ══════════════════════════════════════════
+     RESPONSIVE BREAKPOINTS
+     ══════════════════════════════════════════ */
+  @media (max-width: 1024px) {
+    .features-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .tools-grid {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+  @media (max-width: 768px) {
+    .features-grid {
+      grid-template-columns: 1fr;
+    }
+    .tools-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .header-tagline {
+      font-size: 1.1rem;
+    }
+    .page {
+      padding: 32px 16px 60px;
+    }
+    .browser-content {
+      padding: 16px;
+    }
+    .response-area {
+      padding: 14px 16px;
+    }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ════════════════════════════════════════
+       SECTION 1: HEADER
+       ════════════════════════════════════════ -->
+  <header class="header">
+    <div class="header-logo">Scout<span class="logo-dot">.</span></div>
+    <h1 class="header-tagline">Turn any web portal into a programmable API.</h1>
+    <p class="header-problem">
+      Enterprise portals lock critical data behind logins, iframes, and download buttons
+      that were never meant to be automated. Scout gives Claude a stealth browser and
+      12 MCP tools to navigate them like a human &mdash; then exports repeatable scripts.
+    </p>
+  </header>
+
+  <!-- ════════════════════════════════════════
+       SECTION 2: HERO AREA
+       ════════════════════════════════════════ -->
+  <div class="hero">
+    <button class="replay-btn" id="replay-btn">&#8635; Replay</button>
+
+    <!-- Simulated Browser -->
+    <div class="browser-chrome">
+      <div class="browser-titlebar">
+        <div class="browser-dots">
+          <span class="dot r"></span>
+          <span class="dot y"></span>
+          <span class="dot g"></span>
+        </div>
+        <div class="browser-url" id="browser-url">benefits.example.com/login</div>
+      </div>
+      <div class="browser-content" id="browser-content">
+        <!-- Initial content set by playHero() -->
+      </div>
+    </div>
+
+    <!-- Claude Response Area -->
+    <div class="response-area" id="hero-response">
+      <!-- Lines appended dynamically by the animation engine -->
+    </div>
+
+    <!-- User Input Area -->
+    <div class="user-input-area">
+      <span class="user-input-prompt">You:</span>
+      <div class="user-input-text" id="user-input"><span class="cursor"></span></div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════
+       SECTION 3: HOW IT WORKS
+       ════════════════════════════════════════ -->
+  <div class="section" id="how-it-works">
+    <div class="section-divider"></div>
+    <h2 class="section-header">How it works</h2>
+    <p class="section-subtitle">Six capabilities that turn a chat into a browser automation pipeline.</p>
+    <div class="features-grid" id="features-grid">
+      <div class="feature-card" tabindex="0" role="button" aria-expanded="false" data-demo="discovers">
+        <div class="feature-card-title">Discovers page structure for you</div>
+        <div class="feature-card-summary">Other tools require selectors upfront. Scout scouts and finds them.</div>
+        <div class="feature-card-detail"><div class="card-demo-inner" id="demo-discovers"></div></div>
+      </div>
+      <div class="feature-card" tabindex="0" role="button" aria-expanded="false" data-demo="credentials">
+        <div class="feature-card-title">Credentials never touch the conversation</div>
+        <div class="feature-card-summary">Passwords injected from encrypted vault. Never visible in chat.</div>
+        <div class="feature-card-detail"><div class="card-demo-inner" id="demo-credentials"></div></div>
+      </div>
+      <div class="feature-card" tabindex="0" role="button" aria-expanded="false" data-demo="network">
+        <div class="feature-card-title">Catches what the browser hides</div>
+        <div class="feature-card-summary">XHR calls, blob: URLs, signed download links &mdash; all intercepted.</div>
+        <div class="feature-card-detail"><div class="card-demo-inner" id="demo-network"></div></div>
+      </div>
+      <div class="feature-card" tabindex="0" role="button" aria-expanded="false" data-demo="iframes">
+        <div class="feature-card-title">Works through iframes and shadow DOM</div>
+        <div class="feature-card-summary">Triple-nested iframes? Shadow DOM? Scout pierces all of it.</div>
+        <div class="feature-card-detail"><div class="card-demo-inner" id="demo-iframes"></div></div>
+      </div>
+      <div class="feature-card" tabindex="0" role="button" aria-expanded="false" data-demo="antidetect">
+        <div class="feature-card-title">Passes bot detection</div>
+        <div class="feature-card-summary">Botasaurus handles fingerprint evasion automatically.</div>
+        <div class="feature-card-detail"><div class="card-demo-inner" id="demo-antidetect"></div></div>
+      </div>
+      <div class="feature-card" tabindex="0" role="button" aria-expanded="false" data-demo="export">
+        <div class="feature-card-title">Exports standalone scripts</div>
+        <div class="feature-card-summary">Run it again without Claude. Complete workflow package.</div>
+        <div class="feature-card-detail"><div class="card-demo-inner" id="demo-export"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════
+       SECTION 4: WHY OTTO
+       ════════════════════════════════════════ -->
+  <div class="section" id="why-scout">
+    <div class="section-divider"></div>
+    <h2 class="section-header">Why Scout?</h2>
+    <p class="section-subtitle">How Scout compares to the alternatives you're already considering.</p>
+    <div id="comparison-container" class="comparison-wrapper">
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th></th>
+            <th class="scout-col">Scout</th>
+            <th>Dev-Browser</th>
+            <th>Chrome Extension MCP</th>
+            <th>Playwright MCP</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Works on portals you don't control</td>
+            <td class="scout-col">Yes &mdash; enterprise portals, vendor dashboards, HR systems</td>
+            <td>Limited &mdash; designed for your own app</td>
+            <td>Limited &mdash; your active browser session</td>
+            <td>Limited &mdash; designed for your own app</td>
+          </tr>
+          <tr>
+            <td>Page discovery</td>
+            <td class="scout-col">Compact scout reports (~200 tokens)</td>
+            <td>You provide selectors</td>
+            <td>You provide selectors</td>
+            <td>You provide selectors</td>
+          </tr>
+          <tr>
+            <td>Credential safety</td>
+            <td class="scout-col">Never appears in conversation</td>
+            <td>Plaintext in context</td>
+            <td>Plaintext in context</td>
+            <td>Plaintext in context</td>
+          </tr>
+          <tr>
+            <td>XHR interception</td>
+            <td class="scout-col">Built-in network monitor with filtering</td>
+            <td>No</td>
+            <td>No</td>
+            <td>Limited</td>
+          </tr>
+          <tr>
+            <td>Export to script</td>
+            <td class="scout-col">One command, runs unattended</td>
+            <td>No</td>
+            <td>No</td>
+            <td>No</td>
+          </tr>
+          <tr>
+            <td>Encrypted credentials</td>
+            <td class="scout-col">Vault with OS keyring</td>
+            <td>No</td>
+            <td>No</td>
+            <td>No</td>
+          </tr>
+          <tr>
+            <td>Credential scrubbing</td>
+            <td class="scout-col">Automatic in all output</td>
+            <td>No</td>
+            <td>No</td>
+            <td>No</td>
+          </tr>
+          <tr>
+            <td>Best for</td>
+            <td class="scout-col"><strong>Enterprise systems without APIs</strong></td>
+            <td>Testing your own app</td>
+            <td>Interactive debugging</td>
+            <td>Cross-browser test suites</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════
+       SECTION 5: 12 MCP TOOLS
+       ════════════════════════════════════════ -->
+  <div class="section" id="mcp-tools">
+    <div class="section-divider"></div>
+    <h2 class="section-header">12 MCP Tools</h2>
+    <p class="section-subtitle">Everything Claude needs to explore, interact, and capture &mdash; organized by workflow stage.</p>
+    <div class="tools-grid" id="tools-grid">
+      <div class="tool-card">
+        <span class="tool-badge session">Session</span>
+        <div class="tool-card-name">launch_session</div>
+        <div class="tool-card-desc">Open a stealth browser</div>
+      </div>
+      <div class="tool-card">
+        <span class="tool-badge recon">Recon</span>
+        <div class="tool-card-name">scout_page_tool</div>
+        <div class="tool-card-desc">Structural overview in ~200 tokens</div>
+      </div>
+      <div class="tool-card">
+        <span class="tool-badge recon">Recon</span>
+        <div class="tool-card-name">find_elements</div>
+        <div class="tool-card-desc">Search by text, type, or selector</div>
+      </div>
+      <div class="tool-card">
+        <span class="tool-badge interaction">Interaction</span>
+        <div class="tool-card-name">execute_action_tool</div>
+        <div class="tool-card-desc">Click, type, select, navigate</div>
+      </div>
+      <div class="tool-card">
+        <span class="tool-badge interaction">Interaction</span>
+        <div class="tool-card-name">fill_secret</div>
+        <div class="tool-card-desc">Inject credential without exposure</div>
+      </div>
+      <div class="tool-card">
+        <span class="tool-badge interaction">Interaction</span>
+        <div class="tool-card-name">execute_javascript</div>
+        <div class="tool-card-desc">Run JS in page context</div>
+      </div>
+      <div class="tool-card">
+        <span class="tool-badge recon">Recon</span>
+        <div class="tool-card-name">take_screenshot</div>
+        <div class="tool-card-desc">Visual verification</div>
+      </div>
+      <div class="tool-card">
+        <span class="tool-badge recon">Recon</span>
+        <div class="tool-card-name">inspect_element</div>
+        <div class="tool-card-desc">Deep element diagnostics</div>
+      </div>
+      <div class="tool-card">
+        <span class="tool-badge observation">Observation</span>
+        <div class="tool-card-name">monitor_network</div>
+        <div class="tool-card-desc">Capture XHR/Fetch traffic</div>
+      </div>
+      <div class="tool-card">
+        <span class="tool-badge observation">Observation</span>
+        <div class="tool-card-name">record_video</div>
+        <div class="tool-card-desc">CDP screencast to MP4</div>
+      </div>
+      <div class="tool-card">
+        <span class="tool-badge session">Session</span>
+        <div class="tool-card-name">get_session_history</div>
+        <div class="tool-card-desc">Full structured action log</div>
+      </div>
+      <div class="tool-card">
+        <span class="tool-badge session">Session</span>
+        <div class="tool-card-name">close_session</div>
+        <div class="tool-card-desc">Release browser resources</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════
+       SECTION 6: GET STARTED
+       ════════════════════════════════════════ -->
+  <div class="section" id="get-started">
+    <div class="section-divider"></div>
+    <h2 class="section-header">Get started</h2>
+    <div class="cta-area" id="cta-area">
+      <div class="cta-commands">
+        <div style="margin-bottom:6px;"><span class="dim">$</span> <span class="cyan">/plugin marketplace add</span> stemado/scout-marketplace</div>
+        <div><span class="dim">$</span> <span class="cyan">/plugin install</span> scout@scout-marketplace</div>
+      </div>
+      <div class="cta-links">
+        <a href="getting-started.md">Getting Started Guide</a>
+        <span class="dim">&middot;</span>
+        <a href="https://github.com/stemado/scout" rel="noopener noreferrer">GitHub Repository</a>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /.page -->
+
+<script>
+/* ══════════════════════════════════════════════════════════════
+   ANIMATION ENGINE
+   ══════════════════════════════════════════════════════════════ */
+class AnimationEngine {
+  constructor() {
+    this.running = false;
+    this.abortController = null;
+  }
+
+  /**
+   * Stop any previous scene, then play the given scene (array of steps)
+   * sequentially against the provided container refs.
+   */
+  async play(scene, containers) {
+    this.stop();
+    this.running = true;
+    this.abortController = new AbortController();
+    this.containers = containers;
+
+    for (const step of scene) {
+      if (!this.running) return;
+      try {
+        await this.exec(step);
+      } catch (e) {
+        if (e.name === 'AbortError') return;
+        throw e;
+      }
+    }
+    this.running = false;
+  }
+
+  /** Abort the current scene immediately. */
+  stop() {
+    this.running = false;
+    if (this.abortController) {
+      this.abortController.abort();
+      this.abortController = null;
+    }
+  }
+
+  /** Dispatch a single step to the correct handler. */
+  async exec(step) {
+    if (!this.running) return;
+    switch (step.type) {
+      case 'typewriter':    return this.typewriter(step);
+      case 'fadeIn':        return this.fadeIn(step);
+      case 'fadeOut':       return this.fadeOut(step);
+      case 'browserUpdate': return this.browserUpdate(step);
+      case 'appendLine':    return this.appendLine(step);
+      case 'highlight':     return this.highlight(step);
+      case 'clear':         return this.clear(step);
+      case 'sleep':         return this.sleep(step.ms);
+      default:
+        console.warn('AnimationEngine: unknown step type', step.type);
+    }
+  }
+
+  /**
+   * Type text character-by-character into the target element.
+   * Preserves a .cursor span: removes it before typing, re-adds after.
+   */
+  async typewriter({ target, text, charDelay = 35 }) {
+    const el = typeof target === 'string' ? document.querySelector(target) : target;
+    if (!el) return;
+
+    // Remove existing cursor
+    const cursor = el.querySelector('.cursor');
+    if (cursor) cursor.remove();
+
+    for (let i = 0; i < text.length; i++) {
+      if (!this.running) return;
+      el.insertAdjacentText('beforeend', text[i]);
+      await this.sleep(charDelay);
+    }
+
+    // Re-add cursor
+    const newCursor = document.createElement('span');
+    newCursor.className = 'cursor';
+    el.appendChild(newCursor);
+  }
+
+  /** Fade an element in: opacity 0->1, translateY(4px->0). */
+  async fadeIn({ target, duration = 300 }) {
+    const el = typeof target === 'string' ? document.querySelector(target) : target;
+    if (!el) return;
+
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(4px)';
+    el.style.transition = `opacity ${duration}ms ease, transform ${duration}ms ease`;
+    // Force reflow
+    el.offsetHeight;
+    el.style.opacity = '1';
+    el.style.transform = 'translateY(0)';
+    await this.sleep(duration);
+  }
+
+  /** Fade an element out: opacity 1->0. */
+  async fadeOut({ target, duration = 200 }) {
+    const el = typeof target === 'string' ? document.querySelector(target) : target;
+    if (!el) return;
+
+    el.style.transition = `opacity ${duration}ms ease`;
+    el.style.opacity = '0';
+    await this.sleep(duration);
+  }
+
+  /**
+   * Update the simulated browser: fade out content, swap URL + HTML, fade in.
+   */
+  async browserUpdate({ url, html }) {
+    const urlEl = document.getElementById('browser-url');
+    const contentEl = document.getElementById('browser-content');
+    if (!urlEl || !contentEl) return;
+
+    // Fade out
+    contentEl.style.transition = 'opacity 0.2s ease';
+    contentEl.style.opacity = '0';
+    await this.sleep(220);
+    if (!this.running) return;
+
+    // Swap
+    if (url) urlEl.textContent = url;
+    if (html) contentEl.innerHTML = html;
+
+    // Fade in
+    contentEl.offsetHeight; // force reflow
+    contentEl.style.opacity = '1';
+    await this.sleep(300);
+  }
+
+  /**
+   * Append a new div.response-line to the target, fade it in, auto-scroll.
+   */
+  async appendLine({ target, html }) {
+    const container = typeof target === 'string' ? document.querySelector(target) : target;
+    if (!container) return;
+
+    const line = document.createElement('div');
+    line.className = 'response-line';
+    line.innerHTML = html;
+    container.appendChild(line);
+
+    // Force reflow before showing
+    line.offsetHeight;
+    line.classList.add('visible');
+
+    // Auto-scroll
+    container.scrollTop = container.scrollHeight;
+
+    await this.sleep(80);
+  }
+
+  /** Temporarily add a CSS class, then remove it after duration. */
+  async highlight({ target, className, duration = 1000 }) {
+    const el = typeof target === 'string' ? document.querySelector(target) : target;
+    if (!el) return;
+
+    el.classList.add(className);
+    await this.sleep(duration);
+    if (!this.running) return;
+    el.classList.remove(className);
+  }
+
+  /** Clear the innerHTML of the target. */
+  async clear({ target }) {
+    const el = typeof target === 'string' ? document.querySelector(target) : target;
+    if (el) el.innerHTML = '';
+  }
+
+  /** Promise-based sleep with AbortController support. */
+  sleep(ms) {
+    return new Promise((resolve, reject) => {
+      if (!this.running) {
+        reject(new DOMException('Animation stopped', 'AbortError'));
+        return;
+      }
+      const timer = setTimeout(resolve, ms);
+      if (this.abortController) {
+        this.abortController.signal.addEventListener('abort', () => {
+          clearTimeout(timer);
+          reject(new DOMException('Animation aborted', 'AbortError'));
+        }, { once: true });
+      }
+    });
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   HERO STORY — 4-ACT NARRATIVE
+   ══════════════════════════════════════════════════════════════ */
+
+const engine = new AnimationEngine();
+
+// HTML fragments used in the hero scene
+const loginPageHTML = `
+<div class="sim-form">
+  <div class="sim-field"><label>Email</label><div class="sim-input">admin@corp.com</div></div>
+  <div class="sim-field"><label>Password</label><div class="sim-input" style="color:var(--muted);">&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;</div></div>
+  <div class="sim-btn">Sign In</div>
+</div>`;
+
+const dashboardHTML = `
+<div class="sim-portal-header">
+  <span class="portal-title">Benefits Portal</span>
+  <span class="portal-user">admin@corp.com</span>
+</div>
+<div class="sim-nav">
+  <span>Home</span>
+  <span>Employees</span>
+  <span class="active">Reports</span>
+  <span>Settings</span>
+</div>
+<table class="sim-table">
+  <thead><tr><th>Report</th><th>Period</th><th>Status</th></tr></thead>
+  <tbody>
+    <tr><td style="color:var(--cyan);">Enrollment Summary</td><td>Feb 2026</td><td><span class="ok">Ready</span></td></tr>
+    <tr><td>Claims Detail</td><td>Feb 2026</td><td><span class="yellow">Pending</span></td></tr>
+  </tbody>
+</table>`;
+
+const fileTreeHTML = `
+<div class="sim-file-tree">
+  <div class="dir">benefits-report/</div>
+  <div class="file">run.py</div>
+  <div class="file">workflow.json</div>
+  <div class="file">requirements.txt</div>
+  <div class="file">.env.example</div>
+</div>`;
+
+// ── Build tool-box HTML helper ──
+function toolBox(header, rows, callout) {
+  let html = `<div class="tool-box"><div class="tool-box-header">${header}</div>`;
+  for (const r of rows) {
+    if (r.raw) {
+      html += r.raw;
+    } else {
+      const valClass = r.valClass || 'val';
+      html += `<div class="tool-row"><span class="key">${r.key}:</span> <span class="${valClass}">${r.val}</span></div>`;
+    }
+  }
+  if (callout) {
+    html += `<div class="tool-callout">${callout}</div>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+// ── The 4-Act Scene Definition ──
+const heroScene = [
+  // ── Act 1: The Ask (~4s) ──
+  { type: 'typewriter', target: '#user-input', text: 'Log into the benefits portal, go to Reports, and export this month\'s enrollment CSV', charDelay: 30 },
+  { type: 'sleep', ms: 600 },
+  { type: 'appendLine', target: '#hero-response', html: '<span class="dim">I\'ll scout the login page first.</span>' },
+  { type: 'sleep', ms: 500 },
+
+  // ── Act 2: Scout & Discover (~5s) ──
+  { type: 'appendLine', target: '#hero-response', html: toolBox('scout_page_tool', [
+    { key: 'page', val: 'Benefits Portal \u2014 Login', valClass: 'str' },
+    { key: 'iframes', val: '1 <span class="dim">(vendor-sso.okta.com)</span>' },
+    { key: 'elements', val: 'input: 2, button: 1' },
+  ]) },
+  { type: 'sleep', ms: 800 },
+  { type: 'appendLine', target: '#hero-response', html: '<span class="dim">Login form is inside an iframe. I see the fields.</span>' },
+  { type: 'sleep', ms: 400 },
+
+  // ── Act 3: Drive the Workflow (~6s) ──
+  { type: 'appendLine', target: '#hero-response', html: toolBox('fill_secret', [
+    { key: 'env_var', val: '"PORTAL_PASSWORD"', valClass: 'str' },
+    { key: 'chars_typed', val: '18' },
+  ], '<span class="yellow">Password value: never in conversation</span>') },
+  { type: 'sleep', ms: 600 },
+  { type: 'browserUpdate', url: 'benefits.example.com/dashboard', html: dashboardHTML },
+  { type: 'appendLine', target: '#hero-response', html: toolBox('execute_action_tool', [
+    { key: 'action', val: '"click"', valClass: 'str' },
+    { key: 'target', val: '"Enrollment Summary"', valClass: 'str' },
+  ]) },
+  { type: 'sleep', ms: 500 },
+  { type: 'appendLine', target: '#hero-response', html: toolBox('monitor_network', [
+    { key: 'GET', val: '/api/reports/enrollment.csv \u2014 <span class="ok">200 OK</span> <span class="dim">48 KB</span>' },
+  ], '<span class="ok">\u2713 Download captured</span>') },
+  { type: 'sleep', ms: 600 },
+
+  // ── Act 4: Export & Payoff (~5s) ──
+  { type: 'appendLine', target: '#hero-response', html: toolBox('/export-workflow benefits-report', [
+    { raw: '<div class="tool-row"><span class="val">Exported to <span class="str">workflows/benefits-report/</span></span></div>' },
+  ]) },
+  { type: 'sleep', ms: 300 },
+  { type: 'browserUpdate', url: 'workflows/benefits-report/', html: fileTreeHTML },
+  { type: 'sleep', ms: 600 },
+  { type: 'appendLine', target: '#hero-response', html: '<span class="dim">Exported. Credentials are parameterized \u2014 safe to commit.</span>' },
+  { type: 'sleep', ms: 800 },
+  { type: 'appendLine', target: '#hero-response', html: '<span class="orange" style="font-size:14px;font-weight:600;">The API that should have existed all along.</span>' },
+];
+
+// ── Auto-Play Wiring ──
+async function playHero() {
+  const replayBtn = document.getElementById('replay-btn');
+  const response = document.getElementById('hero-response');
+  const input = document.getElementById('user-input');
+  const urlBar = document.getElementById('browser-url');
+  const browserContent = document.getElementById('browser-content');
+
+  // Hide replay button
+  replayBtn.classList.remove('visible');
+
+  // Reset state
+  response.innerHTML = '';
+  input.innerHTML = '<span class="cursor"></span>';
+  urlBar.textContent = 'benefits.example.com/login';
+  browserContent.style.opacity = '1';
+  browserContent.innerHTML = loginPageHTML;
+
+  // Play the scene
+  await engine.play(heroScene, {
+    response,
+    input,
+    urlBar,
+    browserContent,
+  });
+
+  // Show replay button when done
+  if (engine.running === false) {
+    replayBtn.classList.add('visible');
+  }
+}
+
+// Replay button handler
+document.getElementById('replay-btn').addEventListener('click', () => {
+  playHero();
+});
+
+// Auto-play on load
+setTimeout(playHero, 600);
+
+/* ══════════════════════════════════════════════════════════════
+   CARD DEMO SCENES — Mini-demos for each feature card
+   ══════════════════════════════════════════════════════════════ */
+
+const cardDemos = {
+  discovers: {
+    target: '#demo-discovers',
+    scene: [
+      { type: 'appendLine', target: '#demo-discovers', html: toolBox('scout_page_tool', [
+        { key: 'page', val: 'Employee Benefits Portal', valClass: 'str' },
+        { key: 'iframes', val: '2' },
+        { raw: '<div class="tool-row"><span class="dim" style="padding-left:128px;">depth 0: </span><span class="str">portal.corp.com</span></div>' },
+        { raw: '<div class="tool-row"><span class="dim" style="padding-left:128px;">depth 1: </span><span class="str">vendor-sso.okta.com</span> <span class="yellow">\u26a0 cross-origin</span></div>' },
+        { key: 'elements', val: 'a: 12, input: 3, button: 2, select: 1' },
+      ], '<span class="dim">~200 tokens \u2014 not 50,000</span>') },
+      { type: 'sleep', ms: 800 },
+      { type: 'appendLine', target: '#demo-discovers', html: '<span class="yellow">Other tools: "provide your CSS selectors."</span>' },
+      { type: 'appendLine', target: '#demo-discovers', html: '<span class="ok">Scout: "I found them for you."</span>' },
+    ]
+  },
+
+  credentials: {
+    target: '#demo-credentials',
+    scene: [
+      { type: 'appendLine', target: '#demo-credentials', html: toolBox('fill_secret', [
+        { key: 'env_var', val: '"LOGIN_PASSWORD"', valClass: 'str' },
+        { key: 'chars_typed', val: '14' },
+        { key: 'source', val: 'vault (encrypted)', valClass: 'str' },
+      ], '<span class="yellow">Password value: never in conversation</span>') },
+      { type: 'sleep', ms: 600 },
+      { type: 'appendLine', target: '#demo-credentials', html: '<span class="dim">scout shows: </span><span class="key">value=</span><span class="redacted">[REDACTED]</span>' },
+      { type: 'sleep', ms: 400 },
+      { type: 'appendLine', target: '#demo-credentials', html: '<span class="dim">history shows: </span><span class="yellow">${LOGIN_PASSWORD}</span>' },
+    ]
+  },
+
+  network: {
+    target: '#demo-network',
+    scene: [
+      { type: 'appendLine', target: '#demo-network', html: toolBox('monitor_network \u2014 query', [
+        { raw: '<div class="tool-row"><span class="cyan">GET</span> <span class="str">blob:https://streaming.corp.com/a1b2</span> <span class="dim">\u2192</span></div>' },
+        { raw: '<div class="tool-row"><span class="dim" style="padding-left:32px;">real: </span><span class="str">https://cdn.corp.com/stream/master.m3u8</span> <span class="dim">2.1 KB</span></div>' },
+        { raw: '<div class="tool-row"><span class="dim" style="padding-left:32px;">real: </span><span class="str">https://cdn.corp.com/stream/seg-001.ts</span> <span class="dim">1.2 MB</span></div>' },
+        { raw: '<div class="tool-row"><span class="dim" style="padding-left:32px;">real: </span><span class="str">https://cdn.corp.com/stream/seg-002.ts</span> <span class="dim">1.1 MB</span></div>' },
+      ], '<span class="ok">\u2713 Real URLs captured behind blob: facade</span>') },
+    ]
+  },
+
+  iframes: {
+    target: '#demo-iframes',
+    scene: [
+      { type: 'appendLine', target: '#demo-iframes', html: toolBox('scout_page_tool', [
+        { raw: '<div class="tool-row"><span class="dim">depth 0: </span><span class="str">portal.megacorp.com</span></div>' },
+        { raw: '<div class="tool-row"><span class="dim" style="padding-left:20px;">depth 1: </span><span class="str">vendor-auth.okta.com</span></div>' },
+        { raw: '<div class="tool-row"><span class="dim" style="padding-left:40px;">depth 2: </span><span class="str">sso.provider.io</span> <span class="yellow">\u26a0 cross-origin</span></div>' },
+        { raw: '<div class="tool-row"><span class="dim" style="padding-left:60px;">shadow-root: </span><span class="cyan">login-form &gt;&gt;&gt; input#email</span></div>' },
+      ]) },
+      { type: 'sleep', ms: 600 },
+      { type: 'appendLine', target: '#demo-iframes', html: toolBox('find_elements', [
+        { raw: '<div class="tool-row"><span class="cyan">input#email</span> <span class="dim">frame: sso.provider.io | shadow: login-form</span></div>' },
+        { raw: '<div class="tool-row"><span class="cyan">input#password</span> <span class="dim">frame: sso.provider.io | shadow: login-form</span></div>' },
+      ], '<span class="ok">\u2713 Found through 3 iframes + shadow DOM</span>') },
+    ]
+  },
+
+  antidetect: {
+    target: '#demo-antidetect',
+    scene: [
+      { type: 'appendLine', target: '#demo-antidetect', html: '<div style="display:flex;gap:16px;font-size:0.85rem;">' +
+        '<div style="flex:1;border:1px solid var(--border);border-radius:6px;padding:10px 14px;background:rgba(13,17,23,0.4);">' +
+          '<div class="dim" style="font-weight:600;margin-bottom:6px;padding-bottom:5px;border-bottom:1px solid var(--border);">Playwright</div>' +
+          '<div><span class="ok">\u2713</span> <span class="dim">User Agent</span></div>' +
+          '<div><span class="red">\u2717</span> <span class="red">WebDriver</span></div>' +
+          '<div><span class="red">\u2717</span> <span class="red">Chrome.app</span></div>' +
+          '<div><span class="red">\u2717</span> <span class="red">Permissions</span></div>' +
+          '<div class="dim" style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border);">48/51 passed</div>' +
+        '</div>' +
+        '<div style="flex:1;border:1px solid var(--border);border-radius:6px;padding:10px 14px;background:rgba(13,17,23,0.4);">' +
+          '<div class="ok" style="font-weight:600;margin-bottom:6px;padding-bottom:5px;border-bottom:1px solid var(--border);">Scout (Botasaurus)</div>' +
+          '<div><span class="ok">\u2713</span> <span class="ok">User Agent</span></div>' +
+          '<div><span class="ok">\u2713</span> <span class="ok">WebDriver</span></div>' +
+          '<div><span class="ok">\u2713</span> <span class="ok">Chrome.app</span></div>' +
+          '<div><span class="ok">\u2713</span> <span class="ok">Permissions</span></div>' +
+          '<div class="ok" style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border);">51/51 passed</div>' +
+        '</div>' +
+      '</div>' },
+      { type: 'sleep', ms: 500 },
+      { type: 'appendLine', target: '#demo-antidetect', html: '<span class="dim">Anti-detection is automatic. No configuration needed.</span>' },
+    ]
+  },
+
+  export: {
+    target: '#demo-export',
+    scene: [
+      { type: 'appendLine', target: '#demo-export', html: toolBox('/export-workflow portal-report', [
+        { raw: '<div class="sim-file-tree" style="padding:4px 0;">' +
+            '<div class="dir">portal-report/</div>' +
+            '<div class="file">run.py <span class="dim">\u2014 standalone script, numbered steps</span></div>' +
+            '<div class="file">workflow.json <span class="dim">\u2014 portable definition</span></div>' +
+            '<div class="file">requirements.txt <span class="dim">\u2014 botasaurus-driver</span></div>' +
+            '<div class="file">.env.example <span class="dim">\u2014 PORTAL_PASSWORD=</span></div>' +
+          '</div>' },
+      ], '<span class="ok">\u2713 Credentials parameterized \u2014 safe to commit</span>') },
+    ]
+  },
+};
+
+/* ══════════════════════════════════════════════════════════════
+   ACCORDION WIRING — Click to expand/collapse feature cards
+   ══════════════════════════════════════════════════════════════ */
+
+const cardEngines = {};
+
+function toggleCard(card) {
+  const demoId = card.dataset.demo;
+  const wasActive = card.classList.contains('active');
+
+  // Close all cards, stop all engines, reset aria
+  document.querySelectorAll('.feature-card').forEach(c => {
+    c.classList.remove('active');
+    c.setAttribute('aria-expanded', 'false');
+    const id = c.dataset.demo;
+    if (cardEngines[id]) cardEngines[id].stop();
+  });
+
+  if (wasActive) return; // collapsed
+
+  // Expand this card
+  card.classList.add('active');
+  card.setAttribute('aria-expanded', 'true');
+  const demo = cardDemos[demoId];
+  if (!demo) return;
+
+  // Clear previous demo content
+  const container = document.querySelector(demo.target);
+  if (container) container.innerHTML = '';
+
+  // Play mini-demo
+  const demoEngine = new AnimationEngine();
+  cardEngines[demoId] = demoEngine;
+  demoEngine.play(demo.scene);
+
+  // Scroll into view
+  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+document.querySelectorAll('.feature-card').forEach(card => {
+  card.addEventListener('click', () => toggleCard(card));
+  card.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      toggleCard(card);
+    }
+  });
+});
+</script>
+</body>
+</html>

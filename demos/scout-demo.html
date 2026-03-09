@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>plugin-demo</title>
+    <style>
+        :root {
+            --bg-canvas: #f5f0e8;
+            --bg-terminal: #ffffff;
+            --bg-titlebar: #f0ede6;
+            --color-red: #ff5f57;
+            --color-yellow: #febc2e;
+            --color-green: #28c840;
+            --color-user: #e07a5f;
+            --color-tool: #2dd4bf;
+            --color-text: #374151;
+            --color-muted: #9ca3af;
+            --color-rule: #e5e7eb;
+            --font-mono: 'SF Mono', Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+            --shadow: 0 8px 32px rgba(0,0,0,0.12);
+            --radius: 8px;
+        }
+
+        *, *::before, *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: var(--font-mono);
+        }
+
+        .canvas {
+            width: 100vw;
+            height: 100vh;
+            background: var(--bg-canvas);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* ── Terminal window ── */
+
+        .terminal-window {
+            width: 100%;
+            max-width: 700px;
+            background: var(--bg-terminal);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+
+        /* ── Title bar ── */
+
+        .title-bar {
+            background: var(--bg-titlebar);
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            position: relative;
+        }
+
+        .traffic-lights {
+            display: flex;
+            gap: 8px;
+            z-index: 1;
+        }
+
+        .light {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .light.red    { background: var(--color-red); }
+        .light.yellow { background: var(--color-yellow); }
+        .light.green  { background: var(--color-green); }
+
+        .title-text {
+            position: absolute;
+            left: 0;
+            right: 0;
+            text-align: center;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--color-muted);
+            pointer-events: none;
+        }
+
+        /* ── Terminal body ── */
+
+        .terminal-body {
+            padding: 24px 28px;
+        }
+
+        .output-area {
+            min-height: 40px;
+        }
+
+        /* ── Separator ── */
+
+        .separator {
+            border: none;
+            border-top: 1px solid var(--color-rule);
+            margin: 16px 0;
+        }
+
+        /* ── Input area ── */
+
+        .input-area {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--color-text);
+        }
+
+        .input-area .prompt {
+            color: var(--color-muted);
+            user-select: none;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50%      { opacity: 0; }
+        }
+
+        .cursor {
+            animation: blink 1s step-end infinite;
+            color: var(--color-text);
+        }
+
+        /* ── Scene lines ── */
+
+        .scene-line {
+            padding: 2px 0;
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .scene-user .chevron {
+            color: var(--color-user);
+            font-weight: 600;
+        }
+
+        .scene-assistant .dot.assistant-dot {
+            color: var(--color-user);
+            font-size: 10px;
+        }
+
+        .scene-tool {
+            padding-left: 16px;
+        }
+
+        .scene-tool .dot.tool-dot {
+            color: var(--color-tool);
+            font-size: 10px;
+        }
+
+        .scene-line .text {
+            color: var(--color-text);
+        }
+
+        /* ── Tool running spinner ── */
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50%      { opacity: 0.3; }
+        }
+
+        .scene-tool.running .dot.tool-dot {
+            animation: pulse 1.2s ease-in-out infinite;
+        }
+
+        /* ── Animation engine classes ── */
+
+        .scene-line.fade-in {
+            opacity: 0;
+            transition: opacity 200ms ease-in;
+        }
+        .scene-line.fade-in.visible {
+            opacity: 1;
+        }
+
+        .scene-line.fade-out {
+            opacity: 0;
+            transition: opacity 300ms ease-out;
+        }
+
+        .cursor-inline {
+            display: inline;
+        }
+
+        /* ── Slash menu ── */
+
+        .slash-menu {
+            margin: 4px 0;
+            padding: 4px 0;
+        }
+        .slash-menu.fade-in {
+            opacity: 0;
+            transition: opacity 200ms ease-in;
+        }
+        .slash-menu.fade-in.visible {
+            opacity: 1;
+        }
+        .slash-menu-item {
+            display: flex;
+            gap: 24px;
+            padding: 2px 8px;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .slash-menu-item .cmd {
+            color: var(--color-muted);
+            min-width: 120px;
+        }
+        .slash-menu-item .cmd.highlighted {
+            color: #6b7db3;
+            font-weight: 500;
+        }
+        .slash-menu-item .desc {
+            color: var(--color-muted);
+        }
+        .slash-menu-item .desc.highlighted {
+            color: var(--color-text);
+            font-weight: 500;
+        }
+
+        /* ── Output area scrolling ── */
+
+        .output-area {
+            max-height: 400px;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: var(--color-rule) transparent;
+        }
+    </style>
+</head>
+<body>
+    <div class="canvas">
+        <div class="terminal-window">
+            <div class="title-bar">
+                <div class="traffic-lights">
+                    <span class="light red"></span>
+                    <span class="light yellow"></span>
+                    <span class="light green"></span>
+                </div>
+                <span class="title-text">claude</span>
+            </div>
+            <div class="terminal-body">
+                <div class="output-area" id="output">
+                    <!-- Scenes render here dynamically -->
+                </div>
+                <hr class="separator">
+                <div class="input-area">
+                    <span class="prompt">&gt;</span>
+                    <span class="cursor" id="cursor">&#x258A;</span>
+                </div>
+                <hr class="separator">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Scene data injection point
+        const SCENE_DATA = {
+  "meta": {
+    "title": "claude",
+    "loop": true,
+    "pauseBetweenLoops": 3000
+  },
+  "scenes": [
+    {
+      "type": "user",
+      "text": "/scout:scout reddit.com",
+      "delay": 800
+    },
+    {
+      "type": "assistant",
+      "text": "I'll scout reddit.com to map the page structure.",
+      "delay": 400
+    },
+    {
+      "type": "tool",
+      "name": "launch_session",
+      "args": "reddit.com, headed=true",
+      "status": "complete",
+      "delay": 300
+    },
+    {
+      "type": "tool",
+      "name": "scout_page",
+      "args": "reddit.com",
+      "status": "running",
+      "delay": 200
+    },
+    {
+      "type": "tool",
+      "name": "scout_page",
+      "args": "reddit.com",
+      "status": "complete",
+      "delay": 1200
+    },
+    {
+      "type": "assistant",
+      "text": "Found 47 interactive elements across 3 frames.",
+      "delay": 300
+    },
+    {
+      "type": "assistant",
+      "text": "12 buttons, 8 links, 3 inputs. Main content is in the top frame.",
+      "delay": 200
+    },
+    {
+      "type": "clear",
+      "delay": 2000
+    }
+  ]
+};
+
+        // Hardcoded fallback for development preview
+        const FALLBACK_DATA = {
+            "meta": { "title": "claude", "loop": true, "pauseBetweenLoops": 2000 },
+            "scenes": [
+                { "type": "user", "text": "Hello, Claude!", "delay": 500 },
+                { "type": "assistant", "text": "Hello! How can I help you today?", "delay": 300 },
+                { "type": "tool", "name": "Read", "args": "src/main.py", "status": "complete", "delay": 400 },
+                { "type": "tool", "name": "Grep", "args": "pattern='TODO'", "status": "running", "delay": 400 },
+                { "type": "clear", "delay": 2000 }
+            ]
+        };
+
+        const data = SCENE_DATA || FALLBACK_DATA;
+
+        // Set title from meta
+        document.querySelector('.title-text').textContent = data.meta.title || 'claude';
+        if (data.meta.background) {
+            document.documentElement.style.setProperty('--bg-canvas', data.meta.background);
+        }
+
+        // ── DOM references ──
+
+        const output = document.getElementById('output');
+        const cursor = document.getElementById('cursor');
+        const inputArea = document.querySelector('.input-area');
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        // ── Core utilities ──
+
+        function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
+        function randomBetween(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+
+        // ── Timing constants ──
+
+        const USER_TYPING = { minDelay: 30, maxDelay: 80 };
+        const ASSISTANT_TYPING = { minDelay: 15, maxDelay: 30 };
+        const TOOL_FADE_MS = 200;
+
+        // ── Typewriter function ──
+        // Appends text character-by-character into a container,
+        // repositioning the cursor after each character.
+
+        async function typewrite(container, text, { minDelay, maxDelay }) {
+            const span = document.createElement('span');
+            span.className = 'text';
+            container.appendChild(span);
+
+            // Position cursor right after the text span
+            container.appendChild(cursor);
+            cursor.style.display = '';
+
+            for (let i = 0; i < text.length; i++) {
+                // Bail out early if a restart was requested
+                if (shouldRestart) return;
+
+                span.textContent += text[i];
+                await wait(randomBetween(minDelay, maxDelay));
+            }
+        }
+
+        // ── Scene renderers ──
+
+        async function renderUser(scene) {
+            // User types at the bottom input area, then text moves up
+
+            // 1. Show cursor in input area and type there
+            const typingSpan = document.createElement('span');
+            typingSpan.className = 'text';
+            inputArea.appendChild(typingSpan);
+
+            // Move cursor into input area (after the typing span)
+            inputArea.appendChild(cursor);
+            cursor.style.display = '';
+
+            // Typewrite into the input area
+            for (let i = 0; i < scene.text.length; i++) {
+                if (shouldRestart) return;
+                typingSpan.textContent += scene.text[i];
+                await wait(randomBetween(USER_TYPING.minDelay, USER_TYPING.maxDelay));
+            }
+
+            // 2. Brief pause to simulate "pressing enter"
+            await wait(150);
+
+            // 3. Remove typed text from input area
+            typingSpan.remove();
+
+            // 4. Create the completed user line in the output area
+            const line = document.createElement('div');
+            line.className = 'scene-line scene-user';
+            line.innerHTML = '<span class="chevron">\u276F</span> <span class="text">' + escapeHtml(scene.text) + '</span>';
+            output.appendChild(line);
+
+            // 5. Return cursor to input area (resting position)
+            inputArea.appendChild(cursor);
+        }
+
+        async function renderAssistant(scene) {
+            // Assistant text types directly in the output area
+            const line = document.createElement('div');
+            line.className = 'scene-line scene-assistant';
+            line.innerHTML = '<span class="dot assistant-dot">\u25CF</span>';
+            output.appendChild(line);
+
+            // Typewrite into this output line
+            await typewrite(line, ' ' + scene.text, ASSISTANT_TYPING);
+
+            // Return cursor to input area after assistant finishes
+            cursor.style.display = '';
+            inputArea.appendChild(cursor);
+        }
+
+        async function renderTool(scene) {
+            // Tool calls appear as complete blocks with a fade-in (no typewriter)
+            const line = document.createElement('div');
+            line.className = 'scene-line scene-tool fade-in';
+            if (scene.status === 'running') {
+                line.classList.add('running');
+            }
+            const args = scene.args ? '(' + escapeHtml(scene.args) + ')' : '';
+            line.innerHTML = '<span class="dot tool-dot">\u25CF</span> <span class="text">' + escapeHtml(scene.name) + args + '</span>';
+
+            // Hide cursor during tool fade-in
+            cursor.style.display = 'none';
+
+            output.appendChild(line);
+
+            // Trigger fade-in via CSS transition
+            // Force a reflow so the transition fires
+            void line.offsetWidth;
+            line.classList.add('visible');
+
+            await wait(TOOL_FADE_MS);
+
+            // Restore cursor in input area
+            cursor.style.display = '';
+            inputArea.appendChild(cursor);
+        }
+
+        async function renderClear() {
+            // Fade out all lines, then remove them
+            const lines = output.querySelectorAll('.scene-line, .slash-menu');
+            if (lines.length === 0) return;
+
+            lines.forEach(el => el.classList.add('fade-out'));
+            await wait(300);
+
+            output.innerHTML = '';
+
+            // Ensure cursor is back in input area
+            cursor.style.display = '';
+            inputArea.appendChild(cursor);
+        }
+
+        async function renderSlashMenu(scene) {
+            const menu = document.createElement('div');
+            menu.className = 'slash-menu fade-in';
+
+            for (const item of (scene.items || [])) {
+                const row = document.createElement('div');
+                row.className = 'slash-menu-item';
+
+                const cmdSpan = document.createElement('span');
+                cmdSpan.className = 'cmd' + (item.highlighted ? ' highlighted' : '');
+                cmdSpan.textContent = item.command || '';
+
+                const descSpan = document.createElement('span');
+                descSpan.className = 'desc' + (item.highlighted ? ' highlighted' : '');
+                descSpan.textContent = item.description || '';
+
+                row.appendChild(cmdSpan);
+                row.appendChild(descSpan);
+                menu.appendChild(row);
+            }
+
+            output.appendChild(menu);
+
+            // Fade in
+            void menu.offsetWidth;
+            menu.classList.add('visible');
+
+            // Menus are temporary — hold for a configured delay, then fade out
+            await wait(scene.displayMs || 1500);
+
+            menu.classList.remove('visible');
+            menu.classList.add('fade-out');
+            await wait(300);
+
+            if (menu.parentNode) menu.remove();
+        }
+
+        // ── Main scene queue processor ──
+
+        let isPaused = false;
+        let shouldRestart = false;
+
+        async function playScenes(scenes) {
+            for (const scene of scenes) {
+                // Check for pause
+                while (isPaused && !shouldRestart) {
+                    await wait(100);
+                }
+                if (shouldRestart) return;
+
+                // Wait for scene delay
+                await wait(scene.delay || 300);
+
+                // Render based on type
+                switch (scene.type) {
+                    case 'user':       await renderUser(scene); break;
+                    case 'assistant':  await renderAssistant(scene); break;
+                    case 'tool':       await renderTool(scene); break;
+                    case 'clear':      await renderClear(); break;
+                    case 'pause':      break; // delay already handled
+                    case 'slash-menu': await renderSlashMenu(scene); break;
+                }
+
+                // Auto-scroll output area
+                output.scrollTop = output.scrollHeight;
+            }
+        }
+
+        // ── Loop controller ──
+
+        async function start() {
+            const { meta, scenes } = data;
+
+            while (true) {
+                shouldRestart = false;
+                await playScenes(scenes);
+
+                if (!meta.loop) break;
+                await wait(meta.pauseBetweenLoops || 3000);
+
+                // Clear for next loop
+                await renderClear();
+            }
+        }
+
+        // Start after 1s initial delay
+        wait(1000).then(start);
+
+        // ── Keyboard controls ──
+
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                isPaused = !isPaused;
+            }
+            if (e.code === 'KeyR') {
+                shouldRestart = true;
+                isPaused = false;
+                output.innerHTML = '';
+                // Remove any leftover typing spans from input area
+                inputArea.querySelectorAll('.text').forEach(el => el.remove());
+                // Ensure cursor is back
+                cursor.style.display = '';
+                inputArea.appendChild(cursor);
+                start();
+            }
+        });
+    </script>
+</body>
+</html>

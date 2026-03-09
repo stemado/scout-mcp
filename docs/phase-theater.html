@@ -1,0 +1,1679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scout — From Plugin to Platform</title>
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --green: #3fb950;
+    --cyan: #58a6ff;
+    --yellow: #d29922;
+    --red: #f85149;
+    --orange: #f0883e;
+    --purple: #8b5cf6;
+    --font: 'Cascadia Code', 'Fira Code', 'SF Mono', 'Consolas', monospace;
+  }
+
+  html {
+    font-size: 15px;
+    line-height: 1.55;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    min-height: 100vh;
+    background-image: radial-gradient(circle, rgba(48, 54, 61, 0.4) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  /* ── Page Layout ── */
+  .page {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 48px 24px 80px;
+  }
+
+  /* ── Back Link ── */
+  .back-link {
+    display: inline-block;
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 0.8rem;
+    margin-bottom: 32px;
+    transition: color 0.2s ease;
+  }
+  .back-link:hover { color: var(--cyan); }
+
+  /* ── Section Separators ── */
+  .section { margin-top: 80px; }
+  .section-divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border) 20%, var(--border) 80%, transparent);
+    margin-bottom: 48px;
+  }
+  .section-header {
+    font-size: 1.4rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+  .section-subtitle {
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin-bottom: 32px;
+  }
+
+  /* ══════════════════════════════════════════
+     HEADER
+     ══════════════════════════════════════════ */
+  .header {
+    text-align: center;
+    padding-bottom: 24px;
+  }
+  .header-logo {
+    font-size: 2.2rem;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: var(--text);
+    margin-bottom: 16px;
+  }
+  .header-logo .logo-dot { color: var(--orange); }
+  .header-tagline {
+    font-size: 1.35rem;
+    font-weight: 500;
+    line-height: 1.4;
+    margin-bottom: 20px;
+    background: linear-gradient(135deg, var(--text) 0%, var(--cyan) 50%, var(--orange) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .header-problem {
+    color: var(--muted);
+    font-size: 0.9rem;
+    max-width: 680px;
+    margin: 0 auto;
+    line-height: 1.65;
+  }
+
+  /* ══════════════════════════════════════════
+     PHASE TIMELINE
+     ══════════════════════════════════════════ */
+  .timeline {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin: 48px 0 32px;
+    padding: 0 24px;
+  }
+  .timeline-track {
+    position: absolute;
+    top: 22px;
+    left: 64px;
+    right: 64px;
+    height: 2px;
+    background: var(--border);
+    z-index: 0;
+  }
+  .timeline-progress {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--orange), var(--cyan));
+    transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 1px;
+  }
+  .timeline-node {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    user-select: none;
+    transition: transform 0.2s ease;
+  }
+  .timeline-node:hover { transform: translateY(-2px); }
+  .node-circle {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--muted);
+    transition: all 0.4s ease;
+  }
+  .timeline-node.active .node-circle {
+    border-color: var(--orange);
+    color: var(--orange);
+    box-shadow: 0 0 24px rgba(240, 136, 62, 0.3), 0 0 8px rgba(240, 136, 62, 0.15);
+  }
+  .timeline-node.completed .node-circle {
+    border-color: var(--green);
+    color: var(--green);
+    background: rgba(63, 185, 80, 0.08);
+  }
+  .node-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--muted);
+    text-align: center;
+    transition: color 0.3s ease;
+  }
+  .timeline-node.active .node-title { color: var(--text); }
+  .timeline-node.completed .node-title { color: var(--green); }
+  .node-badge {
+    font-size: 0.6rem;
+    padding: 2px 8px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+  }
+  .node-badge.active-badge  { background: rgba(63, 185, 80, 0.12); color: var(--green); }
+  .node-badge.next-badge    { background: rgba(88, 166, 255, 0.12); color: var(--cyan); }
+  .node-badge.future-badge  { background: rgba(139, 148, 158, 0.12); color: var(--muted); }
+
+  /* ══════════════════════════════════════════
+     STAGE CONTAINER
+     ══════════════════════════════════════════ */
+  .stage-wrapper {
+    position: relative;
+    margin-bottom: 12px;
+  }
+  .stage {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    min-height: 320px;
+    overflow: hidden;
+    transition: opacity 0.3s ease;
+  }
+  .stage-meta {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-top: 12px;
+    padding: 0 4px;
+  }
+  .meta-badge {
+    font-size: 0.7rem;
+    padding: 3px 10px;
+    border-radius: 3px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  .meta-badge.audience { background: rgba(88, 166, 255, 0.1); color: var(--cyan); }
+  .meta-validates {
+    font-size: 0.8rem;
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  /* ── Replay Button ── */
+  .replay-btn {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 10;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 14px;
+    color: var(--muted);
+    font-family: var(--font);
+    font-size: 0.8rem;
+    cursor: pointer;
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: opacity 0.3s ease, transform 0.3s ease, border-color 0.2s ease, color 0.2s ease;
+    pointer-events: none;
+  }
+  .replay-btn.visible {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+  .replay-btn:hover {
+    border-color: var(--cyan);
+    color: var(--cyan);
+  }
+
+  /* ── Response Area ── */
+  .response-area {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-top: 12px;
+    padding: 20px 24px;
+    max-height: 340px;
+    overflow-y: auto;
+    scroll-behavior: smooth;
+    min-height: 0;
+  }
+  .response-area:empty { display: none; }
+  .response-area::-webkit-scrollbar { width: 6px; }
+  .response-area::-webkit-scrollbar-track { background: transparent; }
+  .response-area::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .response-line {
+    margin-bottom: 10px;
+    opacity: 0;
+    transform: translateY(4px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+  }
+  .response-line.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* ── Tool Boxes ── */
+  .tool-box {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin-top: 2px;
+    background: rgba(13, 17, 23, 0.4);
+  }
+  .tool-box-header {
+    color: var(--cyan);
+    font-weight: 600;
+    margin-bottom: 6px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.87rem;
+  }
+  .tool-row {
+    display: flex;
+    gap: 8px;
+    line-height: 1.55;
+    font-size: 0.87rem;
+  }
+  .tool-row .key { color: var(--cyan); min-width: 120px; flex-shrink: 0; }
+  .tool-row .val { color: var(--text); }
+  .tool-callout {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid var(--border);
+    font-size: 0.85rem;
+  }
+
+  /* ══════════════════════════════════════════
+     PHASE I: BROWSER CHROME (reused from showcase)
+     ══════════════════════════════════════════ */
+  .browser-chrome {
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .browser-titlebar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    background: rgba(13, 17, 23, 0.6);
+    border-bottom: 1px solid var(--border);
+  }
+  .browser-dots { display: flex; gap: 6px; }
+  .browser-dots .dot {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    opacity: 0.75;
+  }
+  .browser-dots .dot.r { background: var(--red); }
+  .browser-dots .dot.y { background: var(--yellow); }
+  .browser-dots .dot.g { background: var(--green); }
+  .browser-url {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 5px 12px;
+    font-size: 0.8rem;
+    color: var(--muted);
+    font-family: var(--font);
+    user-select: none;
+  }
+  .browser-content {
+    min-height: 200px;
+    padding: 24px;
+    transition: opacity 0.25s ease;
+  }
+
+  /* ── Simulated Website Elements ── */
+  .sim-form { max-width: 320px; margin: 0 auto; }
+  .sim-field { margin-bottom: 14px; }
+  .sim-field label {
+    display: block;
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .sim-input {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 8px 12px;
+    font-family: var(--font);
+    font-size: 0.85rem;
+    color: var(--text);
+  }
+  .sim-btn {
+    background: var(--cyan);
+    color: var(--bg);
+    border: none;
+    border-radius: 4px;
+    padding: 9px 24px;
+    font-family: var(--font);
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-align: center;
+    cursor: default;
+    margin-top: 6px;
+  }
+  .sim-nav {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 16px;
+  }
+  .sim-nav span {
+    padding: 8px 16px;
+    font-size: 0.82rem;
+    color: var(--muted);
+    border-bottom: 2px solid transparent;
+    cursor: default;
+  }
+  .sim-nav span.active {
+    color: var(--text);
+    border-bottom-color: var(--cyan);
+  }
+  .sim-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+  }
+  .sim-table th,
+  .sim-table td {
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  .sim-table th {
+    color: var(--muted);
+    font-weight: 500;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .sim-portal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 12px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .sim-portal-header .portal-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .sim-portal-header .portal-user {
+    font-size: 0.78rem;
+    color: var(--muted);
+  }
+  .sim-file-tree { font-size: 0.85rem; line-height: 1.8; }
+  .sim-file-tree .dir { color: var(--cyan); font-weight: 600; }
+  .sim-file-tree .file { color: var(--text); padding-left: 20px; }
+  .sim-file-tree .file::before {
+    content: '';
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    margin-right: 6px;
+    border-left: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+    position: relative;
+    top: -2px;
+  }
+
+  /* ══════════════════════════════════════════
+     PHASE II: WORKFLOW DASHBOARD
+     ══════════════════════════════════════════ */
+  .dash-chrome {
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .dash-titlebar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 20px;
+    background: rgba(13, 17, 23, 0.6);
+    border-bottom: 1px solid var(--border);
+  }
+  .dash-titlebar .dash-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .dash-titlebar .dash-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  .dash-content { padding: 20px 24px; }
+  .dash-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+  }
+  .dash-table th,
+  .dash-table td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  .dash-table th {
+    color: var(--muted);
+    font-weight: 500;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .dash-table td { color: var(--text); }
+  .dash-table .wf-name { color: var(--cyan); font-weight: 500; }
+  .dash-table .wf-schedule { color: var(--muted); font-size: 0.78rem; }
+  .status-cell {
+    transition: all 0.4s ease;
+    font-weight: 500;
+  }
+  .status-ok { color: var(--green); }
+  .status-running {
+    color: var(--cyan);
+    animation: status-pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes status-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+  .status-failed { color: var(--red); font-weight: 600; }
+  .status-retrying { color: var(--cyan); }
+
+  /* ══════════════════════════════════════════
+     PHASE III: API CONSOLE
+     ══════════════════════════════════════════ */
+  .api-console {
+    display: flex;
+    gap: 0;
+    min-height: 300px;
+  }
+  .api-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+  .api-panel:first-child { border-right: 1px solid var(--border); }
+  .api-panel-header {
+    padding: 10px 20px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted);
+    background: rgba(13, 17, 23, 0.6);
+    border-bottom: 1px solid var(--border);
+  }
+  .api-body {
+    flex: 1;
+    padding: 20px;
+    font-size: 0.82rem;
+    line-height: 1.65;
+    overflow: auto;
+  }
+  .api-body .cursor {
+    display: inline-block;
+    width: 8px;
+    height: 1.1em;
+    background: var(--cyan);
+    vertical-align: text-bottom;
+    animation: blink 1s step-end infinite;
+    margin-left: 1px;
+  }
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+  .json-line {
+    opacity: 0;
+    transform: translateY(3px);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    white-space: pre;
+  }
+  .json-line.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .json-key { color: var(--cyan); }
+  .json-str { color: var(--green); }
+  .json-num { color: var(--orange); }
+  .json-bool { color: var(--yellow); }
+  .json-brace { color: var(--muted); }
+  .json-highlight {
+    background: rgba(240, 136, 62, 0.15);
+    border-left: 2px solid var(--orange);
+    padding-left: 6px;
+    margin-left: -8px;
+    transition: background 0.4s ease;
+  }
+  .api-annotation {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-style: italic;
+    opacity: 0;
+    transform: translateY(4px);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+  }
+  .api-annotation.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* ══════════════════════════════════════════
+     PHASE IV: HEALTH MONITOR
+     ══════════════════════════════════════════ */
+  .health-monitor {
+    display: flex;
+    gap: 0;
+  }
+  .health-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+  .health-panel:first-child { border-right: 1px solid var(--border); }
+  .health-panel-header {
+    padding: 10px 20px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    background: rgba(13, 17, 23, 0.6);
+    border-bottom: 1px solid var(--border);
+  }
+  .health-panel:first-child .health-panel-header { color: var(--muted); }
+  .health-panel:last-child .health-panel-header { color: var(--orange); }
+  .wireframe {
+    flex: 1;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .wf-el {
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 10px 14px;
+    font-size: 0.78rem;
+    color: var(--muted);
+    background: rgba(13, 17, 23, 0.3);
+    transition: border-color 0.4s ease, box-shadow 0.4s ease, color 0.3s ease;
+    position: relative;
+  }
+  .wf-el .wf-label { display: block; }
+  .wf-el .wf-selector {
+    display: block;
+    font-size: 0.7rem;
+    margin-top: 3px;
+    color: var(--border);
+  }
+  .wf-el.changed {
+    border-color: var(--orange);
+    box-shadow: 0 0 12px rgba(240, 136, 62, 0.15);
+    color: var(--orange);
+  }
+  .wf-el.changed .wf-selector { color: var(--orange); opacity: 0.7; }
+
+  /* Autonomy spectrum */
+  .autonomy-section {
+    padding: 16px 20px;
+    border-top: 1px solid var(--border);
+  }
+  .autonomy-label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .autonomy-bar {
+    display: flex;
+    height: 28px;
+    border-radius: 4px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .autonomy-seg {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .autonomy-seg.auto-repair {
+    background: rgba(63, 185, 80, 0.15);
+    color: var(--green);
+  }
+  .autonomy-seg.propose {
+    background: rgba(210, 153, 34, 0.15);
+    color: var(--yellow);
+  }
+  .autonomy-seg.human-only {
+    background: rgba(248, 81, 73, 0.15);
+    color: var(--red);
+  }
+  .health-counter {
+    text-align: center;
+    padding: 12px 20px;
+    font-size: 0.82rem;
+    color: var(--muted);
+    border-top: 1px solid var(--border);
+    opacity: 0;
+    transition: opacity 0.5s ease;
+  }
+  .health-counter.visible { opacity: 1; }
+
+  /* ══════════════════════════════════════════
+     ARCHITECTURE STACK
+     ══════════════════════════════════════════ */
+  .arch-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .arch-layer {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    border-left: 4px solid var(--layer-color, var(--border));
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+  }
+  .arch-layer.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .arch-layer-name {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text);
+    min-width: 200px;
+    flex-shrink: 0;
+  }
+  .arch-layer-items {
+    font-size: 0.78rem;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+  .arch-connector {
+    width: 2px;
+    height: 6px;
+    background: var(--border);
+    margin: 0 auto;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  .arch-connector.visible { opacity: 1; }
+
+  /* ══════════════════════════════════════════
+     CTA
+     ══════════════════════════════════════════ */
+  .cta-area { text-align: center; padding: 40px 0; }
+  .cta-commands {
+    display: inline-block;
+    text-align: left;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px 32px;
+    margin-bottom: 16px;
+  }
+  .cta-links { margin-top: 16px; font-size: 0.85rem; }
+  .cta-links a { color: var(--cyan); text-decoration: none; }
+  .cta-links a:hover { text-decoration: underline; }
+
+  /* ══════════════════════════════════════════
+     PHASE CLOSING LINE
+     ══════════════════════════════════════════ */
+  .phase-closing {
+    color: var(--orange);
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-top: 4px;
+  }
+
+  /* ══════════════════════════════════════════
+     UTILITY
+     ══════════════════════════════════════════ */
+  .ok     { color: var(--green); }
+  .str    { color: var(--green); }
+  .cyan   { color: var(--cyan); }
+  .yellow { color: var(--yellow); }
+  .red    { color: var(--red); }
+  .dim    { color: var(--muted); }
+  .orange { color: var(--orange); }
+  .redacted { color: var(--red); font-weight: 700; }
+  .hidden { display: none !important; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ══════════════════════════════════════════
+     RESPONSIVE
+     ══════════════════════════════════════════ */
+  @media (max-width: 768px) {
+    .page { padding: 24px 16px 60px; }
+    .header-tagline { font-size: 1.1rem; }
+    .timeline { padding: 0 8px; }
+    .node-title { font-size: 0.7rem; }
+    .node-circle { width: 36px; height: 36px; font-size: 0.75rem; }
+    .api-console { flex-direction: column; }
+    .api-panel:first-child { border-right: none; border-bottom: 1px solid var(--border); }
+    .health-monitor { flex-direction: column; }
+    .health-panel:first-child { border-right: none; border-bottom: 1px solid var(--border); }
+    .arch-layer { flex-direction: column; gap: 4px; }
+    .arch-layer-name { min-width: auto; }
+    .browser-content { padding: 16px; }
+    .response-area { padding: 14px 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <a class="back-link" href="showcase.html">&larr; Back to Showcase</a>
+
+  <!-- ════════════════════════════════════════
+       HEADER
+       ════════════════════════════════════════ -->
+  <header class="header">
+    <div class="header-logo">Scout<span class="logo-dot">.</span></div>
+    <h1 class="header-tagline">From plugin to platform &mdash; the four-phase journey.</h1>
+    <p class="header-problem">
+      Scout starts as a Claude Code plugin that automates enterprise portals.
+      Here's how it becomes the API layer legacy systems never built.
+    </p>
+  </header>
+
+  <!-- ════════════════════════════════════════
+       PHASE TIMELINE
+       ════════════════════════════════════════ -->
+  <div class="timeline" id="timeline">
+    <div class="timeline-track">
+      <div class="timeline-progress" id="timeline-progress"></div>
+    </div>
+    <div class="timeline-node" data-phase="0">
+      <div class="node-circle">I</div>
+      <div class="node-title">Plugin</div>
+      <div class="node-badge active-badge">Active</div>
+    </div>
+    <div class="timeline-node" data-phase="1">
+      <div class="node-circle">II</div>
+      <div class="node-title">Workflows</div>
+      <div class="node-badge next-badge">Next</div>
+    </div>
+    <div class="timeline-node" data-phase="2">
+      <div class="node-circle">III</div>
+      <div class="node-title">Hosted API</div>
+      <div class="node-badge future-badge">Future</div>
+    </div>
+    <div class="timeline-node" data-phase="3">
+      <div class="node-circle">IV</div>
+      <div class="node-title">Adaptive Intel</div>
+      <div class="node-badge future-badge">Future</div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════
+       STAGE
+       ════════════════════════════════════════ -->
+  <div class="stage-wrapper">
+    <button class="replay-btn" id="replay-btn">&#8635; Replay All</button>
+    <div class="stage" id="stage"></div>
+    <div class="stage-meta" id="stage-meta"></div>
+  </div>
+
+  <!-- Response Area (shared) -->
+  <div class="response-area" id="phase-response"></div>
+
+  <!-- ════════════════════════════════════════
+       ARCHITECTURE STACK
+       ════════════════════════════════════════ -->
+  <div class="section hidden" id="architecture">
+    <div class="section-divider"></div>
+    <h2 class="section-header">How it all connects</h2>
+    <p class="section-subtitle">The full stack &mdash; from client systems to browser runtime.</p>
+    <div class="arch-stack" id="arch-stack">
+      <div class="arch-layer" style="--layer-color: #94A3B8;">
+        <div class="arch-layer-name">Client Systems</div>
+        <div class="arch-layer-items">ERP &middot; HRIS &middot; Payroll Engine &middot; Custom Apps</div>
+      </div>
+      <div class="arch-connector"></div>
+      <div class="arch-layer" style="--layer-color: #F59E0B;">
+        <div class="arch-layer-name">Scout API Layer</div>
+        <div class="arch-layer-items">REST Endpoints &middot; Auth &amp; Rate Limiting &middot; Schema Contracts &middot; Billing / Metering</div>
+      </div>
+      <div class="arch-connector"></div>
+      <div class="arch-layer" style="--layer-color: #3B82F6;">
+        <div class="arch-layer-name">Orchestration</div>
+        <div class="arch-layer-items">Workflow Engine &middot; Queue Management &middot; Scheduling &middot; Self-Healing (Claude)</div>
+      </div>
+      <div class="arch-connector"></div>
+      <div class="arch-layer" style="--layer-color: #EF4444;">
+        <div class="arch-layer-name">PII Redaction</div>
+        <div class="arch-layer-items">OCR + Pattern Matching &middot; Semantic Page Descriptions &middot; Image Redaction &middot; Local LLM</div>
+      </div>
+      <div class="arch-connector"></div>
+      <div class="arch-layer" style="--layer-color: #10B981;">
+        <div class="arch-layer-name">Security Boundary</div>
+        <div class="arch-layer-items">Azure Key Vault &middot; Per-Tenant Isolation &middot; Credential Injection &middot; Audit Logging</div>
+      </div>
+      <div class="arch-connector"></div>
+      <div class="arch-layer" style="--layer-color: #8B5CF6;">
+        <div class="arch-layer-name">Browser Runtime</div>
+        <div class="arch-layer-items">Headless Chromium Pool &middot; Session Management &middot; Anti-Detection Engine &middot; Portal Connectors</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════
+       CTA
+       ════════════════════════════════════════ -->
+  <div class="section" id="get-started">
+    <div class="section-divider"></div>
+    <h2 class="section-header">Get started</h2>
+    <div class="cta-area">
+      <div class="cta-commands">
+        <div style="margin-bottom:6px;"><span class="dim">$</span> <span class="cyan">/plugin marketplace add</span> stemado/scout-marketplace</div>
+        <div><span class="dim">$</span> <span class="cyan">/plugin install</span> scout@scout-marketplace</div>
+      </div>
+      <div class="cta-links">
+        <a href="getting-started.md">Getting Started Guide</a>
+        <span class="dim" style="margin:0 8px;">&middot;</span>
+        <a href="https://github.com/stemado/scout" rel="noopener noreferrer">GitHub Repository</a>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /.page -->
+
+<script>
+/* ══════════════════════════════════════════════════════════════
+   ANIMATION ENGINE (from showcase.html)
+   ══════════════════════════════════════════════════════════════ */
+class AnimationEngine {
+  constructor() {
+    this.running = false;
+    this.abortController = null;
+  }
+
+  async play(scene) {
+    this.stop();
+    this.running = true;
+    this.abortController = new AbortController();
+
+    for (const step of scene) {
+      if (!this.running) return;
+      try {
+        await this.exec(step);
+      } catch (e) {
+        if (e.name === 'AbortError') return;
+        throw e;
+      }
+    }
+  }
+
+  stop() {
+    this.running = false;
+    if (this.abortController) {
+      this.abortController.abort();
+      this.abortController = null;
+    }
+  }
+
+  async exec(step) {
+    if (!this.running) return;
+    switch (step.type) {
+      case 'typewriter':      return this.typewriter(step);
+      case 'fadeIn':           return this.fadeIn(step);
+      case 'fadeOut':          return this.fadeOut(step);
+      case 'browserUpdate':    return this.browserUpdate(step);
+      case 'appendLine':       return this.appendLine(step);
+      case 'highlight':        return this.highlight(step);
+      case 'clear':            return this.clear(step);
+      case 'sleep':            return this.sleep(step.ms);
+      case 'dashboardUpdate':  return this.dashboardUpdate(step);
+      case 'jsonAppend':       return this.jsonAppend(step);
+      case 'diffHighlight':    return this.diffHighlight(step);
+      case 'counterShow':      return this.counterShow(step);
+      case 'autonomyShift':    return this.autonomyShift(step);
+      case 'callback':         return step.fn();
+      default:
+        console.warn('AnimationEngine: unknown step type', step.type);
+    }
+  }
+
+  async typewriter({ target, text, charDelay = 35 }) {
+    const el = typeof target === 'string' ? document.querySelector(target) : target;
+    if (!el) return;
+    const cursor = el.querySelector('.cursor');
+    if (cursor) cursor.remove();
+    for (let i = 0; i < text.length; i++) {
+      if (!this.running) return;
+      el.insertAdjacentText('beforeend', text[i]);
+      await this.sleep(charDelay);
+    }
+    const newCursor = document.createElement('span');
+    newCursor.className = 'cursor';
+    el.appendChild(newCursor);
+  }
+
+  async fadeIn({ target, duration = 300 }) {
+    const el = typeof target === 'string' ? document.querySelector(target) : target;
+    if (!el) return;
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(4px)';
+    el.style.transition = `opacity ${duration}ms ease, transform ${duration}ms ease`;
+    el.offsetHeight;
+    el.style.opacity = '1';
+    el.style.transform = 'translateY(0)';
+    await this.sleep(duration);
+  }
+
+  async fadeOut({ target, duration = 200 }) {
+    const el = typeof target === 'string' ? document.querySelector(target) : target;
+    if (!el) return;
+    el.style.transition = `opacity ${duration}ms ease`;
+    el.style.opacity = '0';
+    await this.sleep(duration);
+  }
+
+  async browserUpdate({ url, html }) {
+    const urlEl = document.getElementById('browser-url');
+    const contentEl = document.getElementById('browser-content');
+    if (!urlEl || !contentEl) return;
+    contentEl.style.transition = 'opacity 0.2s ease';
+    contentEl.style.opacity = '0';
+    await this.sleep(220);
+    if (!this.running) return;
+    if (url) urlEl.textContent = url;
+    if (html) contentEl.innerHTML = html;
+    contentEl.offsetHeight;
+    contentEl.style.opacity = '1';
+    await this.sleep(300);
+  }
+
+  async appendLine({ target, html }) {
+    const container = typeof target === 'string' ? document.querySelector(target) : target;
+    if (!container) return;
+    // Ensure container is visible
+    container.style.display = '';
+    const line = document.createElement('div');
+    line.className = 'response-line';
+    line.innerHTML = html;
+    container.appendChild(line);
+    line.offsetHeight;
+    line.classList.add('visible');
+    container.scrollTop = container.scrollHeight;
+    await this.sleep(80);
+  }
+
+  async highlight({ target, className = 'json-highlight', duration = 2000 }) {
+    const el = typeof target === 'string' ? document.querySelector(target) : target;
+    if (!el) return;
+    el.classList.add(className);
+    if (duration > 0) {
+      await this.sleep(duration);
+      if (this.running) el.classList.remove(className);
+    }
+  }
+
+  async clear({ target }) {
+    const el = typeof target === 'string' ? document.querySelector(target) : target;
+    if (el) el.innerHTML = '';
+  }
+
+  async dashboardUpdate({ selector, html, className }) {
+    const el = document.querySelector(selector);
+    if (!el) return;
+    el.style.transition = 'opacity 0.15s ease';
+    el.style.opacity = '0';
+    await this.sleep(160);
+    if (!this.running) return;
+    el.innerHTML = html;
+    el.className = 'status-cell ' + (className || '');
+    el.offsetHeight;
+    el.style.opacity = '1';
+    await this.sleep(200);
+  }
+
+  async jsonAppend({ target, html, delay = 60 }) {
+    const container = typeof target === 'string' ? document.querySelector(target) : target;
+    if (!container) return;
+    const line = document.createElement('div');
+    line.className = 'json-line';
+    line.innerHTML = html;
+    container.appendChild(line);
+    line.offsetHeight;
+    line.classList.add('visible');
+    await this.sleep(delay);
+  }
+
+  async diffHighlight({ target }) {
+    const el = typeof target === 'string' ? document.querySelector(target) : target;
+    if (!el) return;
+    el.classList.add('changed');
+    await this.sleep(100);
+  }
+
+  async counterShow({ target, text }) {
+    const el = typeof target === 'string' ? document.querySelector(target) : target;
+    if (!el) return;
+    el.textContent = text;
+    el.classList.add('visible');
+    await this.sleep(100);
+  }
+
+  async autonomyShift({ widths }) {
+    const segs = document.querySelectorAll('.autonomy-seg');
+    if (segs.length >= 3 && widths.length >= 3) {
+      segs[0].style.width = widths[0];
+      segs[1].style.width = widths[1];
+      segs[2].style.width = widths[2];
+    }
+    await this.sleep(100);
+  }
+
+  sleep(ms) {
+    return new Promise((resolve, reject) => {
+      if (!this.running) {
+        reject(new DOMException('Animation stopped', 'AbortError'));
+        return;
+      }
+      const timer = setTimeout(resolve, ms);
+      if (this.abortController) {
+        this.abortController.signal.addEventListener('abort', () => {
+          clearTimeout(timer);
+          reject(new DOMException('Animation aborted', 'AbortError'));
+        }, { once: true });
+      }
+    });
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   HELPER: Build tool-box HTML
+   ══════════════════════════════════════════════════════════════ */
+function toolBox(header, rows, callout) {
+  let html = `<div class="tool-box"><div class="tool-box-header">${header}</div>`;
+  for (const r of rows) {
+    if (r.raw) {
+      html += r.raw;
+    } else {
+      const valClass = r.valClass || 'val';
+      html += `<div class="tool-row"><span class="key">${r.key}:</span> <span class="${valClass}">${r.val}</span></div>`;
+    }
+  }
+  if (callout) {
+    html += `<div class="tool-callout">${callout}</div>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   PHASE I: PLUGIN — Stage HTML + Scene
+   ══════════════════════════════════════════════════════════════ */
+
+const phaseI_loginHTML = `
+<div class="sim-form">
+  <div class="sim-field"><label>Email</label><div class="sim-input">admin@acme.com</div></div>
+  <div class="sim-field"><label>Password</label><div class="sim-input" style="color:var(--muted);">&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;</div></div>
+  <div class="sim-btn">Sign In</div>
+</div>`;
+
+const phaseI_dashHTML = `
+<div class="sim-portal-header">
+  <span class="portal-title">Vendor Portal</span>
+  <span class="portal-user">admin@acme.com</span>
+</div>
+<div class="sim-nav">
+  <span>Home</span>
+  <span>Invoices</span>
+  <span class="active">Reports</span>
+  <span>Settings</span>
+</div>
+<table class="sim-table">
+  <thead><tr><th>Report</th><th>Period</th><th>Status</th></tr></thead>
+  <tbody>
+    <tr><td style="color:var(--cyan);">Enrollment Summary</td><td>Feb 2026</td><td><span class="ok">Ready</span></td></tr>
+    <tr><td>Claims Detail</td><td>Feb 2026</td><td><span class="yellow">Pending</span></td></tr>
+    <tr><td>Payroll Export</td><td>Jan 2026</td><td><span class="ok">Ready</span></td></tr>
+  </tbody>
+</table>`;
+
+const phaseI_filesHTML = `
+<div class="sim-file-tree">
+  <div class="dir">vendor-report/</div>
+  <div class="file">run.py</div>
+  <div class="file">workflow.json</div>
+  <div class="file">requirements.txt</div>
+  <div class="file">.env.example</div>
+</div>`;
+
+const phaseI_stageHTML = `
+<div class="browser-chrome">
+  <div class="browser-titlebar">
+    <div class="browser-dots"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span></div>
+    <div class="browser-url" id="browser-url">vendor-portal.example.com/login</div>
+  </div>
+  <div class="browser-content" id="browser-content">${phaseI_loginHTML}</div>
+</div>`;
+
+const phaseI_scene = [
+  { type: 'sleep', ms: 600 },
+  { type: 'appendLine', target: '#phase-response', html: '<span class="dim">I\'ll scout the login page first.</span>' },
+  { type: 'sleep', ms: 500 },
+  { type: 'appendLine', target: '#phase-response', html: toolBox('scout_page_tool', [
+    { key: 'page', val: 'Vendor Portal \u2014 Login', valClass: 'str' },
+    { key: 'iframes', val: '1 <span class="dim">(vendor-sso.okta.com)</span>' },
+    { key: 'elements', val: 'input: 2, button: 1' },
+  ]) },
+  { type: 'sleep', ms: 800 },
+  { type: 'appendLine', target: '#phase-response', html: '<span class="dim">Login form is inside an iframe. Filling credentials securely.</span>' },
+  { type: 'sleep', ms: 400 },
+  { type: 'appendLine', target: '#phase-response', html: toolBox('fill_secret', [
+    { key: 'env_var', val: '"PORTAL_PASSWORD"', valClass: 'str' },
+    { key: 'chars_typed', val: '16' },
+  ], '<span class="yellow">Password value: never in conversation</span>') },
+  { type: 'sleep', ms: 600 },
+  { type: 'browserUpdate', url: 'vendor-portal.example.com/reports', html: phaseI_dashHTML },
+  { type: 'appendLine', target: '#phase-response', html: toolBox('execute_action_tool', [
+    { key: 'action', val: '"click"', valClass: 'str' },
+    { key: 'target', val: '"Enrollment Summary"', valClass: 'str' },
+  ]) },
+  { type: 'sleep', ms: 500 },
+  { type: 'appendLine', target: '#phase-response', html: toolBox('monitor_network', [
+    { key: 'GET', val: '/api/reports/enrollment.csv \u2014 <span class="ok">200 OK</span> <span class="dim">48 KB</span>' },
+  ], '<span class="ok">\u2713 Download captured</span>') },
+  { type: 'sleep', ms: 600 },
+  { type: 'appendLine', target: '#phase-response', html: toolBox('/export-workflow vendor-report', [
+    { raw: '<div class="tool-row"><span class="val">Exported to <span class="str">workflows/vendor-report/</span></span></div>' },
+  ]) },
+  { type: 'sleep', ms: 400 },
+  { type: 'browserUpdate', url: 'workflows/vendor-report/', html: phaseI_filesHTML },
+  { type: 'sleep', ms: 600 },
+  { type: 'appendLine', target: '#phase-response', html: '<span class="dim">Exported. Credentials are parameterized \u2014 safe to commit.</span>' },
+  { type: 'sleep', ms: 500 },
+  { type: 'appendLine', target: '#phase-response', html: '<span class="phase-closing">The API that should have existed all along.</span>' },
+];
+
+/* ══════════════════════════════════════════════════════════════
+   PHASE II: WORKFLOWS — Stage HTML + Scene
+   ══════════════════════════════════════════════════════════════ */
+
+const phaseII_stageHTML = `
+<div class="dash-chrome">
+  <div class="dash-titlebar">
+    <div class="dash-status-dot"></div>
+    <span class="dash-title">Scout Workflow Engine</span>
+  </div>
+  <div class="dash-content">
+    <table class="dash-table">
+      <thead>
+        <tr><th>Workflow</th><th>Schedule</th><th>Last Run</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="wf-name">benefits-enrollment</td>
+          <td class="wf-schedule">Mon 6:00 AM</td>
+          <td class="dim">2h ago</td>
+          <td class="status-cell status-ok" id="status-benefits">\u2713 OK</td>
+        </tr>
+        <tr>
+          <td class="wf-name">vendor-invoices</td>
+          <td class="wf-schedule">Daily 8:00 AM</td>
+          <td class="dim">just now</td>
+          <td class="status-cell status-running" id="status-vendor">Running\u2026</td>
+        </tr>
+        <tr>
+          <td class="wf-name">compliance-audit</td>
+          <td class="wf-schedule">1st of month</td>
+          <td class="dim">3d ago</td>
+          <td class="status-cell status-ok" id="status-compliance">\u2713 OK</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>`;
+
+const phaseII_scene = [
+  { type: 'sleep', ms: 1000 },
+  // vendor-invoices completes
+  { type: 'dashboardUpdate', selector: '#status-vendor', html: '\u2713 Complete \u2014 142 records', className: 'status-ok' },
+  { type: 'sleep', ms: 1500 },
+  // benefits-enrollment starts a new run
+  { type: 'dashboardUpdate', selector: '#status-benefits', html: 'Running\u2026', className: 'status-running' },
+  { type: 'sleep', ms: 1800 },
+  // benefits-enrollment fails
+  { type: 'dashboardUpdate', selector: '#status-benefits', html: '\u2717 Failed \u2014 #export-btn not found', className: 'status-failed' },
+  { type: 'sleep', ms: 800 },
+  // Self-healing narrative
+  { type: 'appendLine', target: '#phase-response', html: '<span class="red">Failure detected:</span> <span class="dim">selector</span> <span class="cyan">#export-btn</span> <span class="dim">missing from page</span>' },
+  { type: 'sleep', ms: 600 },
+  { type: 'appendLine', target: '#phase-response', html: toolBox('claude_diagnose', [
+    { key: 'cause', val: 'Portal updated export button', valClass: 'val' },
+    { key: 'old', val: '#export-btn', valClass: 'red' },
+    { key: 'new', val: '.btn-export-csv', valClass: 'str' },
+  ], '<span class="ok">\u2713 Selector repair identified</span>') },
+  { type: 'sleep', ms: 700 },
+  { type: 'appendLine', target: '#phase-response', html: '<span class="dim">Auto-repair applied. Retrying workflow\u2026</span>' },
+  { type: 'sleep', ms: 400 },
+  { type: 'dashboardUpdate', selector: '#status-benefits', html: 'Retrying\u2026', className: 'status-retrying' },
+  { type: 'sleep', ms: 1800 },
+  { type: 'dashboardUpdate', selector: '#status-benefits', html: '\u2713 Complete \u2014 847 records', className: 'status-ok' },
+  { type: 'sleep', ms: 600 },
+  { type: 'appendLine', target: '#phase-response', html: '<span class="phase-closing">Runs unattended. Heals itself.</span>' },
+];
+
+/* ══════════════════════════════════════════════════════════════
+   PHASE III: HOSTED API — Stage HTML + Scene
+   ══════════════════════════════════════════════════════════════ */
+
+const phaseIII_stageHTML = `
+<div class="api-console">
+  <div class="api-panel">
+    <div class="api-panel-header">Request</div>
+    <div class="api-body">
+      <span class="dim">$ </span><span id="api-curl"></span><span class="cursor"></span>
+      <div class="api-annotation" id="api-annotation">The caller never knows a browser was involved.</div>
+    </div>
+  </div>
+  <div class="api-panel">
+    <div class="api-panel-header">Response</div>
+    <div class="api-body" id="api-response"></div>
+  </div>
+</div>`;
+
+const curlText = `curl -X POST https://api.scout.dev/v1/benefits/enrollment \\
+  -H "Authorization: Bearer $SCOUT_TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '{"period": "2026-02", "format": "csv"}'`;
+
+const jsonLines = [
+  { html: '<span class="json-brace">{</span>' },
+  { html: '  <span class="json-key">"status"</span>: <span class="json-str">"complete"</span>,' },
+  { html: '  <span class="json-key">"workflow"</span>: <span class="json-str">"benefits-enrollment"</span>,' },
+  { html: '  <span class="json-key">"records"</span>: <span class="json-num">847</span>,' },
+  { html: '  <span class="json-key">"format"</span>: <span class="json-str">"csv"</span>,' },
+  { html: '  <span class="json-key">"download_url"</span>: <span class="json-str">"https://api.scout.dev/v1/dl/abc123"</span>,' },
+  { html: '  <span class="json-key">"duration_ms"</span>: <span class="json-num">12400</span>,' },
+  { html: '  <span class="json-key">"browser_used"</span>: <span class="json-bool">true</span>,', id: 'json-browser-used' },
+  { html: '  <span class="json-key">"billing"</span>: <span class="json-brace">{</span> <span class="json-key">"credits"</span>: <span class="json-num">1</span>, <span class="json-key">"tier"</span>: <span class="json-str">"standard"</span> <span class="json-brace">}</span>' },
+  { html: '<span class="json-brace">}</span>' },
+];
+
+const phaseIII_scene = [
+  { type: 'sleep', ms: 600 },
+  { type: 'typewriter', target: '#api-curl', text: curlText, charDelay: 18 },
+  { type: 'sleep', ms: 500 },
+  { type: 'callback', fn: () => {
+    const ann = document.getElementById('api-annotation');
+    if (ann) ann.classList.add('visible');
+  }},
+  { type: 'sleep', ms: 800 },
+  // JSON response lines
+  ...jsonLines.map(l => ({
+    type: 'jsonAppend',
+    target: '#api-response',
+    html: l.id ? `<span id="${l.id}">${l.html}</span>` : l.html,
+    delay: 100,
+  })),
+  { type: 'sleep', ms: 500 },
+  // Highlight browser_used line
+  { type: 'highlight', target: '#json-browser-used', className: 'json-highlight', duration: 3000 },
+  { type: 'sleep', ms: 400 },
+  { type: 'appendLine', target: '#phase-response', html: '<span class="dim">Transparent to the consumer. The downstream system receives JSON \u2014 never knows a browser was involved.</span>' },
+  { type: 'sleep', ms: 600 },
+  { type: 'appendLine', target: '#phase-response', html: '<span class="phase-closing">The Plaid model for every legacy system.</span>' },
+];
+
+/* ══════════════════════════════════════════════════════════════
+   PHASE IV: ADAPTIVE INTELLIGENCE — Stage HTML + Scene
+   ══════════════════════════════════════════════════════════════ */
+
+const phaseIV_stageHTML = `
+<div class="health-monitor">
+  <div class="health-panel">
+    <div class="health-panel-header">Expected</div>
+    <div class="wireframe">
+      <div class="wf-el">
+        <span class="wf-label">Nav: Home | Reports | Settings</span>
+        <span class="wf-selector">ul.main-nav</span>
+      </div>
+      <div class="wf-el">
+        <span class="wf-label">Login Button</span>
+        <span class="wf-selector">#btn-login</span>
+      </div>
+      <div class="wf-el">
+        <span class="wf-label">Employee ID</span>
+        <span class="wf-selector">input[name="emp_id"]</span>
+      </div>
+      <div class="wf-el">
+        <span class="wf-label">Password</span>
+        <span class="wf-selector">input[type="password"]</span>
+      </div>
+    </div>
+  </div>
+  <div class="health-panel">
+    <div class="health-panel-header">Actual &mdash; Scanned Today</div>
+    <div class="wireframe">
+      <div class="wf-el" id="actual-nav">
+        <span class="wf-label">Nav: Home | Reports | <span class="orange">API Access</span> | Settings</span>
+        <span class="wf-selector">ul.main-nav</span>
+      </div>
+      <div class="wf-el" id="actual-btn">
+        <span class="wf-label"><span class="orange">Submit</span></span>
+        <span class="wf-selector"><span class="orange">.auth-submit</span></span>
+      </div>
+      <div class="wf-el" id="actual-field">
+        <span class="wf-label"><span class="orange">Worker ID</span></span>
+        <span class="wf-selector">input[name="emp_id"]</span>
+      </div>
+      <div class="wf-el">
+        <span class="wf-label">Password</span>
+        <span class="wf-selector">input[type="password"]</span>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="autonomy-section">
+  <div class="autonomy-label">Autonomy Spectrum</div>
+  <div class="autonomy-bar">
+    <div class="autonomy-seg auto-repair" style="width:40%">Auto-repair</div>
+    <div class="autonomy-seg propose" style="width:35%">Propose + Approve</div>
+    <div class="autonomy-seg human-only" style="width:25%">Human Only</div>
+  </div>
+</div>
+<div class="health-counter" id="health-counter"></div>`;
+
+const phaseIV_scene = [
+  { type: 'sleep', ms: 800 },
+  // Highlight diffs one by one
+  { type: 'diffHighlight', target: '#actual-btn' },
+  { type: 'sleep', ms: 600 },
+  { type: 'diffHighlight', target: '#actual-field' },
+  { type: 'sleep', ms: 600 },
+  { type: 'diffHighlight', target: '#actual-nav' },
+  { type: 'sleep', ms: 800 },
+  // Claude's analysis
+  { type: 'appendLine', target: '#phase-response', html: '<span class="dim">Scheduled health scan complete \u2014</span> <span class="orange">3 changes detected</span>' },
+  { type: 'sleep', ms: 500 },
+  { type: 'appendLine', target: '#phase-response', html: toolBox('Change 1 \u2014 Cosmetic', [
+    { key: 'element', val: 'Login button', valClass: 'val' },
+    { key: 'selector', val: '<span class="red">#btn-login</span> \u2192 <span class="str">.auth-submit</span>' },
+    { key: 'action', val: '<span class="ok">Auto-repair applied</span>' },
+  ]) },
+  { type: 'sleep', ms: 500 },
+  { type: 'appendLine', target: '#phase-response', html: toolBox('Change 2 \u2014 Cosmetic', [
+    { key: 'element', val: 'Form label', valClass: 'val' },
+    { key: 'label', val: '<span class="red">Employee ID</span> \u2192 <span class="str">Worker ID</span>' },
+    { key: 'action', val: '<span class="ok">Auto-repair applied</span>' },
+  ]) },
+  { type: 'sleep', ms: 500 },
+  { type: 'appendLine', target: '#phase-response', html: toolBox('Change 3 \u2014 Structural', [
+    { key: 'element', val: 'Navigation', valClass: 'val' },
+    { key: 'change', val: 'New item: <span class="orange">API Access</span>' },
+    { key: 'action', val: '<span class="yellow">Flagged for human review</span>' },
+  ]) },
+  { type: 'sleep', ms: 700 },
+  // Shift autonomy spectrum
+  { type: 'autonomyShift', widths: ['55%', '30%', '15%'] },
+  { type: 'sleep', ms: 600 },
+  // Show counter
+  { type: 'counterShow', target: '#health-counter', text: 'Portal integrations monitored: 247 \u2014 Auto-healed this week: 31' },
+  { type: 'sleep', ms: 800 },
+  { type: 'appendLine', target: '#phase-response', html: '<span class="phase-closing">1,000 portals \u2260 1,000 engineers.</span>' },
+];
+
+/* ══════════════════════════════════════════════════════════════
+   PHASE DEFINITIONS
+   ══════════════════════════════════════════════════════════════ */
+
+const phases = [
+  {
+    stageHtml: phaseI_stageHTML,
+    scene: phaseI_scene,
+    audience: 'Internal',
+    validates: 'Reliable automation against portals with anti-bot detection',
+  },
+  {
+    stageHtml: phaseII_stageHTML,
+    scene: phaseII_scene,
+    audience: 'Internal \u2192 External',
+    validates: 'Unattended execution reliability and failure recovery',
+  },
+  {
+    stageHtml: phaseIII_stageHTML,
+    scene: phaseIII_scene,
+    audience: 'Internal \u2192 Gradual External',
+    validates: 'Enterprise-grade API synthesis at scale',
+  },
+  {
+    stageHtml: phaseIV_stageHTML,
+    scene: phaseIV_scene,
+    audience: 'Platform-Wide',
+    validates: 'Operational scalability without proportional human intervention',
+  },
+];
+
+/* ══════════════════════════════════════════════════════════════
+   PHASE CONTROLLER
+   ══════════════════════════════════════════════════════════════ */
+
+// Plain sleep — no engine state checks, just a timer.
+// Used for controller transitions (fade stage, pause between phases).
+function wait(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+const controller = {
+  engine: new AnimationEngine(),
+  current: -1,
+  playing: false,
+
+  async playAll() {
+    this.playing = true;
+    document.getElementById('replay-btn').classList.remove('visible');
+
+    // Hide architecture initially
+    document.getElementById('architecture').classList.add('hidden');
+
+    for (let i = 0; i < phases.length; i++) {
+      if (!this.playing) return;
+      await this.playPhase(i);
+      if (!this.playing) return;
+      // Pause between phases
+      await wait(1800);
+    }
+
+    // Architecture capstone
+    if (this.playing) await this.playArchitecture();
+
+    this.playing = false;
+    document.getElementById('replay-btn').classList.add('visible');
+  },
+
+  async playPhase(index) {
+    this.current = index;
+    this.updateTimeline();
+
+    const stage = document.getElementById('stage');
+    const response = document.getElementById('phase-response');
+    const meta = document.getElementById('stage-meta');
+
+    // Fade out stage
+    stage.style.transition = 'opacity 0.25s ease';
+    stage.style.opacity = '0';
+    await wait(260);
+    if (!this.playing && !this._jumping) return;
+
+    // Swap content
+    const phase = phases[index];
+    stage.innerHTML = phase.stageHtml;
+    response.innerHTML = '';
+
+    // Show meta
+    meta.innerHTML = `
+      <span class="meta-badge audience">${phase.audience}</span>
+      <span class="meta-validates">Validates: ${phase.validates}</span>
+    `;
+
+    // Fade in stage
+    stage.offsetHeight;
+    stage.style.opacity = '1';
+    await wait(300);
+    if (!this.playing && !this._jumping) return;
+
+    // Play scene
+    await this.engine.play(phase.scene);
+
+    // Mark completed on timeline
+    const nodes = document.querySelectorAll('.timeline-node');
+    if (nodes[index]) nodes[index].classList.add('completed');
+  },
+
+  jumpToPhase(index) {
+    this.engine.stop();
+    this.playing = true;
+    this._jumping = true;
+
+    // Reset completed states for phases after target
+    document.querySelectorAll('.timeline-node').forEach((n, i) => {
+      if (i > index) n.classList.remove('completed');
+    });
+
+    this.playPhase(index).then(() => {
+      this._jumping = false;
+      this.playing = false;
+      document.getElementById('replay-btn').classList.add('visible');
+    });
+  },
+
+  async playArchitecture() {
+    const section = document.getElementById('architecture');
+    section.classList.remove('hidden');
+
+    // Scroll into view
+    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    await wait(400);
+
+    // Animate layers top to bottom
+    const layers = section.querySelectorAll('.arch-layer');
+    const connectors = section.querySelectorAll('.arch-connector');
+
+    for (let i = 0; i < layers.length; i++) {
+      if (!this.playing) return;
+      layers[i].classList.add('visible');
+      // Show connector below (if exists)
+      if (connectors[i]) {
+        await wait(150);
+        connectors[i].classList.add('visible');
+      }
+      await wait(250);
+    }
+  },
+
+  updateTimeline() {
+    const nodes = document.querySelectorAll('.timeline-node');
+    nodes.forEach((node, i) => {
+      node.classList.toggle('active', i === this.current);
+    });
+
+    // Progress bar
+    const progress = document.getElementById('timeline-progress');
+    if (progress && this.current >= 0) {
+      const pct = this.current / (phases.length - 1) * 100;
+      progress.style.width = pct + '%';
+    }
+  },
+};
+
+/* ══════════════════════════════════════════════════════════════
+   WIRING
+   ══════════════════════════════════════════════════════════════ */
+
+// Timeline node clicks
+document.querySelectorAll('.timeline-node').forEach((node, i) => {
+  node.addEventListener('click', () => controller.jumpToPhase(i));
+});
+
+// Replay button
+document.getElementById('replay-btn').addEventListener('click', () => {
+  // Reset all completed states
+  document.querySelectorAll('.timeline-node').forEach(n => n.classList.remove('completed'));
+  document.getElementById('architecture').classList.add('hidden');
+  document.querySelectorAll('.arch-layer').forEach(l => l.classList.remove('visible'));
+  document.querySelectorAll('.arch-connector').forEach(c => c.classList.remove('visible'));
+  controller.playAll();
+});
+
+// Auto-play on load
+setTimeout(() => controller.playAll(), 800);
+</script>
+</body>
+</html>

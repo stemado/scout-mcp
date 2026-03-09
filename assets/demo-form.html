@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Acme Technologies — Senior Software Engineer Application</title>
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      height: 100%;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background-color: #0a0a0a;
+      color: #e5e5e5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 40px 20px;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 560px;
+    }
+
+    /* ── Header ── */
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .brand-icon {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: -0.5px;
+      flex-shrink: 0;
+    }
+
+    .brand-name {
+      font-size: 15px;
+      font-weight: 600;
+      color: #a3a3a3;
+      letter-spacing: -0.01em;
+    }
+
+    /* ── Card ── */
+    .card {
+      background: #141414;
+      border: 1px solid #262626;
+      border-radius: 12px;
+      padding: 40px;
+      margin-top: 20px;
+    }
+
+    .card-title {
+      font-size: 22px;
+      font-weight: 600;
+      color: #f5f5f5;
+      letter-spacing: -0.02em;
+      margin-bottom: 4px;
+    }
+
+    .card-subtitle {
+      font-size: 14px;
+      color: #737373;
+      margin-bottom: 32px;
+      line-height: 1.5;
+    }
+
+    /* ── Form fields ── */
+    .field {
+      position: relative;
+      margin-bottom: 20px;
+    }
+
+    .field label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: #a3a3a3;
+      margin-bottom: 6px;
+      letter-spacing: 0.01em;
+    }
+
+    .field input,
+    .field textarea {
+      width: 100%;
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 6px;
+      padding: 10px 14px;
+      font-size: 14px;
+      font-family: inherit;
+      color: #f5f5f5;
+      outline: none;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+      line-height: 1.5;
+    }
+
+    .field input::placeholder,
+    .field textarea::placeholder {
+      color: #525252;
+    }
+
+    .field input:hover,
+    .field textarea:hover {
+      border-color: #3a3a3a;
+    }
+
+    .field input:focus,
+    .field textarea:focus {
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+    }
+
+    .field textarea {
+      resize: vertical;
+      min-height: 88px;
+    }
+
+    /* ── Two-column row ── */
+    .row {
+      display: flex;
+      gap: 16px;
+    }
+
+    .row .field {
+      flex: 1;
+    }
+
+    /* ── Divider ── */
+    .divider {
+      border: none;
+      border-top: 1px solid #1f1f1f;
+      margin: 28px 0;
+    }
+
+    /* ── Submit button ── */
+    .submit-btn {
+      width: 100%;
+      padding: 12px 20px;
+      background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      letter-spacing: -0.01em;
+      margin-top: 8px;
+    }
+
+    .submit-btn:hover {
+      background: linear-gradient(180deg, #4b8df8 0%, #3b7cf6 100%);
+      box-shadow: 0 4px 16px rgba(59, 130, 246, 0.25);
+      transform: translateY(-1px);
+    }
+
+    .submit-btn:active {
+      transform: translateY(0);
+      box-shadow: none;
+    }
+
+    /* ── Required dot ── */
+    .required {
+      color: #ef4444;
+      margin-left: 2px;
+    }
+
+    /* ── Footer ── */
+    .footer {
+      text-align: center;
+      margin-top: 24px;
+      font-size: 12px;
+      color: #525252;
+    }
+
+    .footer a {
+      color: #525252;
+      text-decoration: none;
+      transition: color 0.15s ease;
+    }
+
+    .footer a:hover {
+      color: #737373;
+    }
+
+    /* ── Success state ── */
+    .success-state {
+      display: none;
+      text-align: center;
+      padding: 60px 20px;
+    }
+
+    .success-state.visible {
+      display: block;
+    }
+
+    .success-icon {
+      width: 56px;
+      height: 56px;
+      background: rgba(34, 197, 94, 0.1);
+      border: 1px solid rgba(34, 197, 94, 0.2);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+    }
+
+    .success-icon svg {
+      width: 28px;
+      height: 28px;
+      stroke: #22c55e;
+      fill: none;
+      stroke-width: 2.5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .success-state h2 {
+      font-size: 20px;
+      font-weight: 600;
+      color: #f5f5f5;
+      margin-bottom: 8px;
+      letter-spacing: -0.02em;
+    }
+
+    .success-state p {
+      font-size: 14px;
+      color: #737373;
+      line-height: 1.6;
+      max-width: 340px;
+      margin: 0 auto;
+    }
+
+    /* ── Fade animations ── */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .card {
+      animation: fadeIn 0.4s ease-out;
+    }
+
+    .success-state.visible {
+      animation: fadeIn 0.35s ease-out;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="brand">
+      <div class="brand-icon">A</div>
+      <span class="brand-name">Acme Technologies</span>
+    </div>
+
+    <div class="card">
+      <!-- ── Form ── -->
+      <div id="formContent">
+        <h1 class="card-title">Senior Software Engineer</h1>
+        <p class="card-subtitle">Join our engineering team and help build the future of developer tools.</p>
+
+        <form id="applicationForm" action="#" onsubmit="return handleSubmit(event)">
+          <div class="field">
+            <label for="fullName">Full Name <span class="required">*</span></label>
+            <input type="text" id="fullName" name="fullName" placeholder="Jane Smith" required>
+          </div>
+
+          <div class="row">
+            <div class="field">
+              <label for="email">Email <span class="required">*</span></label>
+              <input type="email" id="email" name="email" placeholder="jane@example.com" required>
+            </div>
+            <div class="field">
+              <label for="phone">Phone</label>
+              <input type="tel" id="phone" name="phone" placeholder="+1 (555) 000-0000">
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="linkedin">LinkedIn</label>
+            <input type="url" id="linkedin" name="linkedin" placeholder="https://linkedin.com/in/janesmith">
+          </div>
+
+          <div class="field">
+            <label for="currentRole">Current Role</label>
+            <input type="text" id="currentRole" name="currentRole" placeholder="Staff Engineer at Stripe">
+          </div>
+
+          <hr class="divider">
+
+          <div class="field">
+            <label for="motivation">Why do you want to join Acme? <span class="required">*</span></label>
+            <textarea id="motivation" name="motivation" rows="4" placeholder="Tell us what excites you about this role and our mission..." required></textarea>
+          </div>
+
+          <button type="submit" class="submit-btn">Submit Application</button>
+        </form>
+      </div>
+
+      <!-- ── Success ── -->
+      <div id="successState" class="success-state">
+        <div class="success-icon">
+          <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        </div>
+        <h2>Application submitted</h2>
+        <p>Thank you for your interest in Acme Technologies. Our team will review your application and get back to you shortly.</p>
+      </div>
+    </div>
+
+    <div class="footer">
+      <a href="#">Privacy</a> &nbsp;&middot;&nbsp; <a href="#">Terms</a> &nbsp;&middot;&nbsp; &copy; 2026 Acme Technologies
+    </div>
+  </div>
+
+  <script>
+    function handleSubmit(e) {
+      e.preventDefault();
+      document.getElementById('formContent').style.display = 'none';
+      var success = document.getElementById('successState');
+      success.classList.add('visible');
+      return false;
+    }
+  </script>
+</body>
+</html>

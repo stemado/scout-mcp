@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head><title>Actions Test Page</title></head>
+<body>
+  <h1 id="heading">Actions Test</h1>
+
+  <!-- Click testing -->
+  <button id="click-btn" onclick="document.getElementById('click-result').textContent='clicked'">
+    Click Me
+  </button>
+  <span id="click-result"></span>
+
+  <!-- Type + clear testing -->
+  <input id="text-input" type="text" placeholder="Type here" />
+
+  <!-- Select testing -->
+  <select id="color-select">
+    <option value="red">Red</option>
+    <option value="green">Green</option>
+    <option value="blue">Blue</option>
+  </select>
+
+  <!-- Hover testing -->
+  <div id="hover-target"
+       style="width:100px;height:100px;background:white;"
+       onmouseover="this.dataset.hovered='true'"
+       onmouseout="this.dataset.hovered='false'">
+    Hover here
+  </div>
+
+  <!-- Press key testing -->
+  <input id="key-input" type="text"
+         onkeydown="document.getElementById('key-result').textContent=event.key" />
+  <span id="key-result"></span>
+
+  <!-- Scroll testing (tall content) -->
+  <div id="scroll-marker" style="margin-top:2000px;">Bottom marker</div>
+
+  <!-- Hidden element for inspect -->
+  <div id="hidden-el" style="display:none;">Hidden</div>
+
+  <!-- Obscured element for inspect -->
+  <div style="position:relative;width:200px;height:200px;">
+    <button id="obscured-btn" style="position:absolute;top:0;left:0;">Under</button>
+    <div id="overlay" style="position:absolute;top:0;left:0;width:200px;height:200px;background:rgba(0,0,0,0.5);z-index:10;"></div>
+  </div>
+
+  <!-- Element with ARIA and children for inspect -->
+  <nav id="nav-element" role="navigation" aria-label="Main navigation">
+    <a href="#">Link 1</a>
+    <a href="#">Link 2</a>
+    <span>Text</span>
+  </nav>
+
+  <!-- Form element for inspect input_state -->
+  <input id="checkbox-input" type="checkbox" checked />
+
+  <!-- Delayed element for wait-for-element -->
+  <script>
+    setTimeout(function() {
+      var el = document.createElement('div');
+      el.id = 'delayed-element';
+      el.textContent = 'I appeared!';
+      document.body.appendChild(el);
+    }, 1000);
+  </script>
+</body>
+</html>
