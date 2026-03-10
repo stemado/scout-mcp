@@ -284,9 +284,16 @@ class DownloadManager:
 
     def _on_download_will_begin(self, event: cdp.browser.DownloadWillBegin) -> None:
         """Handle Browser.DownloadWillBegin — fires before file is written."""
+        # Sanitize suggested_filename to prevent path traversal.
+        # Chrome's CDP normally strips directory components, but we validate
+        # defensively rather than relying on browser behavior.
+        safe_filename = os.path.basename(event.suggested_filename or "download")
+        if not safe_filename:
+            safe_filename = "download"
+
         download = DownloadEvent(
             guid=event.guid,
-            suggested_filename=event.suggested_filename,
+            suggested_filename=safe_filename,
             url=event.url,
             file_path=os.path.join(self._session_dir, event.guid),
             state="pending",

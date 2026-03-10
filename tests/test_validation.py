@@ -10,19 +10,19 @@ from scout.validation import validate_directory_path, validate_regex_pattern, va
 
 class TestValidateUrl:
     def test_blocks_file_scheme(self):
-        with pytest.raises(ValueError, match="Blocked URL scheme"):
+        with pytest.raises(ValueError, match="Only http and https"):
             validate_url("file:///etc/passwd")
 
     def test_blocks_chrome_scheme(self):
-        with pytest.raises(ValueError, match="Blocked URL scheme"):
+        with pytest.raises(ValueError, match="Only http and https"):
             validate_url("chrome://settings")
 
     def test_blocks_javascript_scheme(self):
-        with pytest.raises(ValueError, match="Blocked URL scheme"):
+        with pytest.raises(ValueError, match="Only http and https"):
             validate_url("javascript:alert(1)")
 
     def test_blocks_data_scheme(self):
-        with pytest.raises(ValueError, match="Blocked URL scheme"):
+        with pytest.raises(ValueError, match="Only http and https"):
             validate_url("data:text/html,<h1>hi</h1>")
 
     def test_blocks_cloud_metadata(self):
@@ -40,6 +40,26 @@ class TestValidateUrl:
     def test_blocks_localhost_name(self):
         with pytest.raises(ValueError, match="Blocked URL host"):
             validate_url("http://localhost:8080/admin")
+
+    def test_blocks_ftp_scheme(self):
+        with pytest.raises(ValueError, match="Only http and https"):
+            validate_url("ftp://example.com/file")
+
+    def test_blocks_gopher_scheme(self):
+        with pytest.raises(ValueError, match="Only http and https"):
+            validate_url("gopher://example.com")
+
+    def test_blocks_ipv6_mapped_metadata(self):
+        with pytest.raises(ValueError, match="Blocked URL host"):
+            validate_url("http://[::ffff:169.254.169.254]/latest/meta-data/")
+
+    def test_blocks_ipv6_mapped_loopback(self):
+        with pytest.raises(ValueError, match="Blocked URL host"):
+            validate_url("http://[::ffff:127.0.0.1]:8080/admin")
+
+    def test_blocks_ipv6_loopback(self):
+        with pytest.raises(ValueError, match="Blocked URL host"):
+            validate_url("http://[::1]:8080/admin")
 
     def test_allows_http(self):
         validate_url("http://example.com")

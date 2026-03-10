@@ -42,11 +42,13 @@ from .otp import poll_for_otp
 
 MAX_WAIT_MS = 60_000        # 1 minute
 MAX_TIMEOUT_MS = 300_000    # 5 minutes
+MAX_JS_TIMEOUT_S = 120      # 2 minutes — JS execution safety cap
 MAX_RESULTS = 500           # Scout JS caps at 500 elements
 
 # --- Session ID format ---
 
 _SESSION_ID_RE = re.compile(r"^[0-9a-f]{12}$")
+_SCHEDULE_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$")
 
 # --- Application Context (lifespan-managed state) ---
 
@@ -512,9 +514,21 @@ async def execute_javascript(
     session = _get_session(app_ctx, session_id)
 
     await ctx.info("Executing JavaScript...")
-    result, record = await asyncio.to_thread(
-        run_javascript, session.driver, script, frame_context
-    )
+    try:
+        result, record = await asyncio.wait_for(
+            asyncio.to_thread(run_javascript, session.driver, script, frame_context),
+            timeout=MAX_JS_TIMEOUT_S,
+        )
+    except asyncio.TimeoutError:
+        # The thread may continue running — asyncio cannot kill threads.
+        # But we unblock the server and return an error to the client.
+        await ctx.warning(f"JS execution timed out after {MAX_JS_TIMEOUT_S}s")
+        return sanitize_response({
+            "success": False,
+            "error": f"Execution timed out after {MAX_JS_TIMEOUT_S}s. "
+                     "The script may still be running in the browser.",
+            "elapsed_ms": MAX_JS_TIMEOUT_S * 1000,
+        }, secrets=session._secret_values)
 
     session.history.record_javascript(record)
 
@@ -1061,6 +1075,12 @@ async def schedule_create(
     """
     from pathlib import Path
 
+    # Validate name format (prevent path traversal in task scheduler namespaces)
+    if not _SCHEDULE_NAME_RE.match(name):
+        return {
+            "error": "Invalid task name. Use only letters, numbers, hyphens, and underscores (1-64 chars, must start with alphanumeric)."
+        }
+
     # Validate schedule parameter
     schedule_upper = schedule.upper()
     if schedule_upper not in _VALID_SCHEDULES:
@@ -1148,6 +1168,9 @@ async def schedule_delete(
     Args:
         name: Name of the scheduled task to delete.
     """
+    if not _SCHEDULE_NAME_RE.match(name):
+        return {"error": "Invalid task name format."}
+
     try:
         scheduler = get_scheduler()
     except UnsupportedPlatformError as e:

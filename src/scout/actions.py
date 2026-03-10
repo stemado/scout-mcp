@@ -117,7 +117,7 @@ def execute_action(
 
             case "navigate":
                 _require(value, "value (URL) required for navigate")
-                validate_url(value, allow_localhost=bool(os.environ.get("SCOUT_ALLOW_LOCALHOST")))
+                validate_url(value, allow_localhost=os.environ.get("SCOUT_ALLOW_LOCALHOST", "").lower() in ("1", "true", "yes"))
                 driver.get(value)
                 action_desc = f"Navigated to '{value}'"
 

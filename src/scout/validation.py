@@ -2,30 +2,67 @@
 
 from __future__ import annotations
 
+import ipaddress
 import os
 import re
 from urllib.parse import urlparse
 
-# --- URL validation (Task 6) ---
+# --- URL validation ---
 
-_BLOCKED_SCHEMES = frozenset({
-    "file", "ftp", "data", "chrome", "chrome-extension",
-    "javascript", "about", "blob", "devtools",
+# Allowlist: only permit standard web schemes.
+_ALLOWED_SCHEMES = frozenset({"http", "https"})
+
+_LOOPBACK_HOSTNAMES = frozenset({"localhost"})
+
+_BLOCKED_METADATA_IPS = frozenset({
+    "169.254.169.254",          # AWS EC2 metadata
+    "100.100.100.200",           # Alibaba Cloud metadata
 })
 
-_LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "0.0.0.0"})
-
-_BLOCKED_HOSTS = frozenset({
-    "169.254.169.254",          # AWS EC2 metadata
+_BLOCKED_METADATA_HOSTS = frozenset({
     "metadata.google.internal",  # GCP metadata
-    "100.100.100.200",           # Alibaba Cloud metadata
-}) | _LOOPBACK_HOSTS
+})
+
+
+def _is_blocked_host(hostname: str, *, allow_localhost: bool = False) -> bool:
+    """Check if a hostname is blocked (metadata endpoints, loopback, link-local).
+
+    Normalizes IP addresses via the ``ipaddress`` module to catch alternative
+    encodings such as IPv6-mapped IPv4 (``::ffff:169.254.169.254``).
+    """
+    hostname_lower = hostname.lower()
+
+    # Named hostname checks
+    if hostname_lower in _BLOCKED_METADATA_HOSTS:
+        return True
+    if hostname_lower in _LOOPBACK_HOSTNAMES:
+        return not allow_localhost
+
+    # Try to parse as an IP address for property-based checks
+    try:
+        addr = ipaddress.ip_address(hostname)
+    except ValueError:
+        # Not a standard IP literal — no further checks
+        return False
+
+    # IPv6-mapped IPv4: extract the v4 address for comparison
+    if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped:
+        addr = addr.ipv4_mapped
+
+    if addr.is_loopback:
+        return not allow_localhost
+    if addr.is_link_local:
+        return True
+    if str(addr) in _BLOCKED_METADATA_IPS:
+        return True
+
+    return False
 
 
 def validate_url(url: str, *, allow_localhost: bool = False) -> None:
     """Validate a URL is safe to navigate to.
 
-    Raises ValueError for blocked schemes or hosts.
+    Raises ValueError for non-http(s) schemes or blocked hosts.
     Allows empty strings (callers handle those as no-ops).
 
     Args:
@@ -37,19 +74,14 @@ def validate_url(url: str, *, allow_localhost: bool = False) -> None:
 
     parsed = urlparse(url)
 
-    if parsed.scheme.lower() in _BLOCKED_SCHEMES:
-        raise ValueError(f"Blocked URL scheme: {parsed.scheme}")
+    # Scheme allowlist: only http and https are permitted.
+    # Empty scheme (e.g. bare "example.com") is allowed — the browser normalizes it.
+    if parsed.scheme and parsed.scheme.lower() not in _ALLOWED_SCHEMES:
+        raise ValueError(f"Only http and https URLs are allowed, got scheme: {parsed.scheme}")
 
     hostname = parsed.hostname
-    if hostname:
-        hostname_lower = hostname.lower()
-        if allow_localhost and hostname_lower in _LOOPBACK_HOSTS:
-            return
-        if hostname_lower in _BLOCKED_HOSTS:
-            raise ValueError(f"Blocked URL host: {hostname}")
-        # Block link-local range (169.254.x.x)
-        if hostname_lower.startswith("169.254."):
-            raise ValueError(f"Blocked URL host: {hostname}")
+    if hostname and _is_blocked_host(hostname, allow_localhost=allow_localhost):
+        raise ValueError(f"Blocked URL host: {hostname}")
 
 
 # --- Directory path validation (Task 7) ---

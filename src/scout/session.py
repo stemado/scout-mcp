@@ -74,7 +74,7 @@ class BrowserSession:
 
             current_url = "about:blank"
             if url:
-                validate_url(url, allow_localhost=bool(os.environ.get("SCOUT_ALLOW_LOCALHOST")))
+                validate_url(url, allow_localhost=os.environ.get("SCOUT_ALLOW_LOCALHOST", "").lower() in ("1", "true", "yes"))
                 self.driver.get(url)
                 current_url = self.driver.current_url
                 self.history.record_navigation(current_url)

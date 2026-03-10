@@ -12,7 +12,8 @@ from __future__ import annotations
 
 import csv
 import os
-import xml.etree.ElementTree as ET
+
+import defusedxml.ElementTree as ET
 
 from scout.converters import register
 
