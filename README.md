@@ -80,16 +80,26 @@ npx -y scout-mcp-server
 
 ## Configure Your AI Client
 
-Add Scout to your client's MCP server configuration:
+You configure Scout once. After that, your AI client starts and stops the server automatically — you never run it manually.
 
-### Claude Desktop / Claude Code
+### Claude Code
+
+```bash
+claude mcp add scout -- npx -y scout-mcp-server
+```
+
+Restart Claude Code. Scout's 17 tools are now available in every session.
+
+### Claude Desktop
+
+Add to your `claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
     "scout": {
-      "command": "uvx",
-      "args": ["scout-mcp-server"]
+      "command": "npx",
+      "args": ["-y", "scout-mcp-server"]
     }
   }
 }
@@ -112,7 +122,7 @@ In Cursor Settings > MCP Servers, add:
 
 ### Windsurf / Continue / Other MCP Clients
 
-Use either the `uvx` or `npx` configuration above — both work with any MCP-compatible client.
+Use the same JSON configuration above — it works with any MCP-compatible client.
 
 ---
 
