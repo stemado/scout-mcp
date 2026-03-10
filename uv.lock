@@ -943,8 +943,8 @@ wheels = [
 ]
 
 [[package]]
-name = "scout"
-version = "0.5.1"
+name = "scout-mcp-server"
+version = "1.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "botasaurus-driver" },
