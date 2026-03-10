@@ -56,6 +56,7 @@ Everything in `src/scout/` except `engine.py`:
 - `sanitize.py` — Response scrubbing
 - `validation.py` — URL/path validation
 - `otp.py` — 2FA code polling
+- `converters/` — File format conversion (SpreadsheetML → xlsx, etc.)
 - `js/scout_page.js` — Client-side page reconnaissance
 - `js/inspect_element.js` — Client-side element inspection
 - `scheduler/` — Cross-platform scheduling (Windows/macOS/Linux)
@@ -81,6 +82,9 @@ scout/
 │   ├── sanitize.py
 │   ├── validation.py
 │   ├── otp.py
+│   ├── converters/
+│   │   ├── __init__.py
+│   │   └── spreadsheetml.py       # SpreadsheetML → xlsx conversion
 │   ├── js/
 │   │   ├── scout_page.js
 │   │   └── inspect_element.js
@@ -119,8 +123,8 @@ keywords = ["mcp", "browser", "automation", "anti-detection", "botasaurus", "mod
 scout-mcp-server = "scout.server:main"
 
 [project.urls]
-Homepage = "https://github.com/mtsteinle/scout"
-Repository = "https://github.com/mtsteinle/scout"
+Homepage = "https://github.com/stemado/scout-mcp"
+Repository = "https://github.com/stemado/scout-mcp"
 ```
 
 **Installation:**
@@ -146,18 +150,18 @@ A thin Node.js package that installs and launches the Python MCP server.
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/mtsteinle/scout"
+    "url": "https://github.com/stemado/scout-mcp"
   },
   "keywords": ["mcp", "browser", "automation", "model-context-protocol"]
 }
 ```
 
 **`npm/index.js` launcher:**
-1. Try `uvx scout-mcp-server` (zero-install Python runner)
+1. Try `uvx scout-mcp-server` (zero-install Python runner — preferred)
 2. Fallback: `pipx run scout-mcp-server`
-3. Fallback: `python -m scout.server`
-4. Pass through all stdio for MCP transport
-5. Forward exit codes
+3. Pass through all stdio for MCP transport
+4. Forward exit codes and termination signals (SIGTERM/SIGINT)
+5. Uses `shell: true` on Windows for `.cmd` shim compatibility
 
 ## MCP Client Configuration
 
@@ -227,8 +231,8 @@ Minimal — engine integration was commands-only (not MCP tools):
 - `python-dotenv>=1.0.0` — .env loading
 - `pyyaml>=6.0` — YAML parsing
 
-**Evaluate for removal:**
-- `httpx>=0.27.0` — Was used by `engine.py`. Check if any other module uses it. If not, remove.
+**Evaluated and retained:**
+- `httpx>=0.27.0` — Used by `otp.py` for Twilio SMS polling. Was also used by the now-removed `engine.py`, but `otp.py` still requires it.
 
 ## README
 

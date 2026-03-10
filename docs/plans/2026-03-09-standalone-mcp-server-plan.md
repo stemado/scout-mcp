@@ -142,7 +142,7 @@ dependencies = [
     "botasaurus-driver>=4.0.0",
     "pydantic>=2.0.0",
     "python-dotenv>=1.0.0",
-    "httpx>=0.27.0",
+    "httpx>=0.27.0",  # retained — used by otp.py for Twilio SMS polling
     "pyyaml>=6.0",
 ]
 
@@ -150,9 +150,9 @@ dependencies = [
 scout-mcp-server = "scout.server:main"
 
 [project.urls]
-Homepage = "https://github.com/stemado/scout"
-Repository = "https://github.com/stemado/scout"
-Issues = "https://github.com/stemado/scout/issues"
+Homepage = "https://github.com/stemado/scout-mcp"
+Repository = "https://github.com/stemado/scout-mcp"
+Issues = "https://github.com/stemado/scout-mcp/issues"
 ```
 
 **Step 2: Update `src/scout/__init__.py`**
@@ -215,6 +215,7 @@ publishable to PyPI."
 **Files:**
 - Create: `npm/package.json`
 - Create: `npm/index.js`
+- Create: `npm/README.md`
 
 **Step 1: Create npm directory**
 
@@ -233,7 +234,7 @@ mkdir -p npm
   "author": "sdoherty",
   "repository": {
     "type": "git",
-    "url": "https://github.com/stemado/scout"
+    "url": "https://github.com/stemado/scout-mcp"
   },
   "keywords": [
     "mcp",
@@ -247,7 +248,8 @@ mkdir -p npm
     "scout-mcp-server": "./index.js"
   },
   "files": [
-    "index.js"
+    "index.js",
+    "README.md"
   ],
   "engines": {
     "node": ">=18"
@@ -264,16 +266,24 @@ mkdir -p npm
  * scout-mcp-server npm launcher
  *
  * Thin wrapper that launches the Python MCP server.
- * Tries uvx first (zero-install), then pipx, then pip+python fallback.
+ * Tries uvx first (zero-install), then pipx fallback.
  * All stdio is passed through for MCP transport.
+ *
+ * Windows compatibility: uses shell:true so Node can execute .cmd/.ps1
+ * shims (uvx.cmd, pipx.cmd) that package managers install on Windows.
+ *
+ * Signal forwarding: SIGTERM/SIGINT are forwarded to the child process
+ * so the Python server (and Chrome) shut down cleanly when the MCP
+ * client disconnects.
  */
 
-const { spawn } = require("child_process");
-const { execSync } = require("child_process");
+const { spawn, execSync } = require("child_process");
+
+const IS_WIN = process.platform === "win32";
 
 function commandExists(cmd) {
   try {
-    execSync(`${cmd} --version`, { stdio: "ignore" });
+    execSync(`${cmd} --version`, { stdio: "ignore", shell: true });
     return true;
   } catch {
     return false;
@@ -283,13 +293,25 @@ function commandExists(cmd) {
 function launch(command, args) {
   const child = spawn(command, args, {
     stdio: "inherit",
+    shell: IS_WIN,
     windowsHide: true,
   });
+
+  // Forward termination signals so the Python server shuts down cleanly.
+  // Without this, killing the npm process orphans the Python process
+  // (and any Chrome instances it launched).
+  function forwardSignal(signal) {
+    process.on(signal, () => {
+      child.kill(signal);
+    });
+  }
+  forwardSignal("SIGTERM");
+  forwardSignal("SIGINT");
 
   child.on("error", (err) => {
     if (err.code === "ENOENT") {
       process.stderr.write(
-        `Error: '${command}' not found. Install Python 3.11+ and uv (https://docs.astral.sh/uv/).\n`
+        `Error: '${command}' not found. Install uv (https://docs.astral.sh/uv/) and Python 3.11+.\n`
       );
       process.exit(1);
     }
@@ -310,19 +332,61 @@ if (commandExists("uvx")) {
 else if (commandExists("pipx")) {
   launch("pipx", ["run", "scout-mcp-server"]);
 }
-// Strategy 3: Direct python
-else if (commandExists("python3") || commandExists("python")) {
-  const python = commandExists("python3") ? "python3" : "python";
-  launch(python, ["-m", "scout.server"]);
-}
-// No Python found
+// No supported launcher found
 else {
   process.stderr.write(
-    "Error: Python not found. Install Python 3.11+ and uv (https://docs.astral.sh/uv/).\n"
+    "Error: Neither uvx nor pipx found.\n" +
+    "Install uv (recommended): https://docs.astral.sh/uv/\n" +
+    "Or install pipx: https://pipx.pypa.io/\n"
   );
   process.exit(1);
 }
 ```
+
+**Step 3b: Write `npm/README.md`**
+
+This is what renders on the npm registry page. Keep it focused on npm users.
+
+```markdown
+# scout-mcp-server
+
+MCP server for browser automation with anti-detection. Scout pages, find elements, interact with websites, and monitor network traffic — from any AI client that supports the [Model Context Protocol](https://modelcontextprotocol.io/).
+
+Built on [botasaurus-driver](https://github.com/omkarcloud/botasaurus) for automatic fingerprint evasion and stealth browsing.
+
+## Quick Start
+
+```bash
+npx -y scout-mcp-server
+```
+
+## Configure Your AI Client
+
+Add to your MCP server configuration:
+
+```json
+{
+  "mcpServers": {
+    "scout": {
+      "command": "npx",
+      "args": ["-y", "scout-mcp-server"]
+    }
+  }
+}
+```
+
+Works with Claude Desktop, Cursor, Windsurf, Continue, and any MCP-compatible client.
+
+**Prerequisites:** Python 3.11+, Google Chrome, and either [uv](https://docs.astral.sh/uv/) (recommended) or [pipx](https://pipx.pypa.io/).
+
+For full documentation, see the [GitHub repository](https://github.com/stemado/scout-mcp).
+```
+
+> **Why no direct `python -m scout.server` fallback?** That strategy only works if
+> the user already ran `pip install scout-mcp-server` — but if they did that, they
+> can run `scout-mcp-server` directly without the npm launcher. Including it as a
+> fallback produces a confusing `ModuleNotFoundError` when the package isn't
+> installed, misleading users into thinking Python itself is broken.
 
 **Step 4: Test the launcher locally**
 
@@ -340,7 +404,8 @@ cd ..
 git add npm/ && git commit -m "feat: add npm launcher package
 
 Thin Node.js wrapper that finds and launches the Python MCP server.
-Tries uvx (preferred), pipx, then direct python fallback.
+Tries uvx (preferred), then pipx fallback. Forwards termination
+signals so Chrome shuts down cleanly when the MCP client disconnects.
 Enables 'npx -y scout-mcp-server' for any AI client."
 ```
 
@@ -478,7 +543,7 @@ Schedule exported workflows with the `schedule_create` tool — works on Windows
 
 ```bash
 # Clone and install
-git clone https://github.com/stemado/scout.git
+git clone https://github.com/stemado/scout-mcp.git
 cd scout
 uv sync
 
@@ -533,19 +598,25 @@ uv run pytest tests/ -m "not integration" -v
 
 Expected: All tests pass. No import errors for engine.
 
-**Step 3: Check for any remaining references to "Claude Code" or plugin in source**
+**Step 3: Check for any remaining references to "Claude Code" or plugin in source and docs**
 
 ```bash
+# Source code
 grep -r "Claude Code" src/scout/ --include="*.py"
 grep -r "CLAUDE_PLUGIN_ROOT" src/scout/ --include="*.py"
 grep -r "plugin" src/scout/ --include="*.py"
+
+# Documentation, scripts, demos, benchmarks
+grep -r "Claude Code" docs/ scripts/ demos/ benchmarks/ --include="*.md" --include="*.py" --include="*.json"
+grep -r "CLAUDE_PLUGIN_ROOT" docs/ scripts/ demos/ benchmarks/
+grep -r "plugin" docs/ --include="*.md" | grep -v "browser plugin" | grep -v "plans/"
 ```
 
-Expected: No matches (or only incidental uses of "plugin" in unrelated context like comments about browser plugins).
+Expected: No matches in source (or only incidental uses of "plugin" in unrelated context like comments about browser plugins). Documentation hits outside `docs/plans/` should be updated or removed.
 
 **Step 4: Fix any stale references found in Step 3**
 
-Update docstrings or comments that reference "Claude Code" to say "MCP server" instead.
+Update docstrings, comments, and documentation that reference "Claude Code" to say "MCP server" instead. Remove or archive engine integration docs (`docs/2026-03-07-engine-integration-*.md`) if they are no longer relevant.
 
 **Step 5: Run tests again after fixes**
 

@@ -1,9 +1,0 @@
-{
-  "mcpServers": {
-    "scout": {
-      "command": "uv",
-      "args": ["run", "--directory", "${CLAUDE_PLUGIN_ROOT}", "scout"],
-      "env": {}
-    }
-  }
-}
