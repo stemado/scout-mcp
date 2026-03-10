@@ -1,0 +1,29 @@
+{
+  "name": "scout-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for browser automation with anti-detection. Scout pages, find elements, interact with websites, and monitor network traffic.",
+  "license": "MIT",
+  "author": "sdoherty",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stemado/scout-mcp"
+  },
+  "keywords": [
+    "mcp",
+    "browser",
+    "automation",
+    "anti-detection",
+    "model-context-protocol",
+    "botasaurus"
+  ],
+  "bin": {
+    "scout-mcp-server": "./index.js"
+  },
+  "files": [
+    "index.js",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}
