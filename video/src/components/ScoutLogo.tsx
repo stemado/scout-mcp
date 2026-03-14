@@ -9,7 +9,7 @@ export const ScoutLogo: React.FC = () => {
   const scaleSpring = spring({ fps, frame, config: { damping: 80 } });
   const scale = interpolate(scaleSpring, [0, 1], [0.6, 1]);
   const opacity = interpolate(frame, [0, 15], [0, 1], { extrapolateRight: "clamp" });
-  const fadeOut = interpolate(frame, [45, 60], [1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  const fadeOut = interpolate(frame, [50, 70], [1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
 
   return (
     <AbsoluteFill style={{

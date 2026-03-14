@@ -7,21 +7,22 @@ import { Schedule } from "./components/Schedule";
 import { ScoutLogo } from "./components/ScoutLogo";
 import beatsData from "./beats.json";
 
-/** Beats that render inside browser chrome */
-const BROWSER_BEATS = new Set(["launch", "scout", "interact", "captured"]);
+/** Beats that render inside browser chrome (pricing stays visible through pre-export) */
+const BROWSER_BEATS = new Set(["launch", "scout", "interact", "captured", "pre-export"]);
 
 export const ScoutDemo: React.FC = () => {
   const beats = beatsData.beats;
+  const outroBeat = beats.find(b => b.id === "outro")!;
 
   return (
     <AbsoluteFill>
-      {/* Beats 1-6: split screen */}
-      <Sequence from={0} durationInFrames={840}>
+      {/* All beats except outro: split screen */}
+      <Sequence from={0} durationInFrames={outroBeat.startFrame}>
         <SplitScreen
           left={<Terminal beats={beats} />}
           right={
             <AbsoluteFill>
-              {/* Browser-wrapped beats (landing through captured pricing) */}
+              {/* Browser-wrapped beats (landing through pre-export pricing) */}
               {beats.filter(b => BROWSER_BEATS.has(b.id)).map((beat) => (
                 <Sequence key={beat.id} from={beat.startFrame} durationInFrames={beat.endFrame - beat.startFrame}>
                   <Browser
@@ -55,7 +56,7 @@ export const ScoutDemo: React.FC = () => {
       </Sequence>
 
       {/* Outro: full-screen */}
-      <Sequence from={840} durationInFrames={60}>
+      <Sequence from={outroBeat.startFrame} durationInFrames={outroBeat.endFrame - outroBeat.startFrame}>
         <ScoutLogo />
       </Sequence>
     </AbsoluteFill>

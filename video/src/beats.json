@@ -1,6 +1,6 @@
 {
   "fps": 30,
-  "durationInFrames": 900,
+  "durationInFrames": 1050,
   "beats": [
     {
       "id": "launch",
@@ -55,7 +55,7 @@
     {
       "id": "captured",
       "startFrame": 500,
-      "endFrame": 590,
+      "endFrame": 600,
       "terminal": {
         "lines": [
           { "text": "", "color": "default", "delay": 5 },
@@ -66,26 +66,36 @@
       "browser": { "scene": "pricing", "shieldState": "dissolved" }
     },
     {
-      "id": "export",
-      "startFrame": 590,
-      "endFrame": 720,
+      "id": "pre-export",
+      "startFrame": 600,
+      "endFrame": 740,
       "terminal": {
         "lines": [
-          { "text": "", "color": "default", "delay": 8 },
-          { "text": "> Export this as a workflow I can run daily", "color": "user", "framesPerChar": 1 },
           { "text": "", "color": "default", "delay": 10 },
+          { "text": "> Export this as a workflow I can run daily", "color": "user", "framesPerChar": 1 },
+          { "text": "", "color": "default", "delay": 12 },
           { "text": "$ get_session_history()", "color": "command", "framesPerChar": 2 },
-          { "text": "  \u2713 6 actions recorded", "color": "success", "delay": 15 },
-          { "text": "  \u2713 login-workflow.py", "color": "success", "delay": 12 },
-          { "text": "  \u2713 login-workflow.json", "color": "success", "delay": 12 }
+          { "text": "  \u2713 6 actions recorded", "color": "success", "delay": 20 }
+        ]
+      },
+      "browser": { "scene": "pricing", "shieldState": "dissolved" }
+    },
+    {
+      "id": "export",
+      "startFrame": 740,
+      "endFrame": 860,
+      "terminal": {
+        "lines": [
+          { "text": "  \u2713 login-workflow.py", "color": "success", "delay": 10 },
+          { "text": "  \u2713 login-workflow.json", "color": "success", "delay": 15 }
         ]
       },
       "browser": { "scene": "export", "shieldState": "dissolved" }
     },
     {
       "id": "schedule",
-      "startFrame": 720,
-      "endFrame": 840,
+      "startFrame": 860,
+      "endFrame": 980,
       "terminal": {
         "lines": [
           { "text": "", "color": "default", "delay": 5 },
@@ -102,8 +112,8 @@
     },
     {
       "id": "outro",
-      "startFrame": 840,
-      "endFrame": 900,
+      "startFrame": 980,
+      "endFrame": 1050,
       "terminal": { "lines": [] },
       "browser": { "scene": "outro", "shieldState": "dissolved" }
     }
