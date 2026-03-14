@@ -10,3 +10,4 @@ build/
 .ruff_cache/
 *.env
 .worktrees/
+release-scout-mcp/
