@@ -10,4 +10,5 @@ build/
 .ruff_cache/
 *.env
 .worktrees/
+.superpowers/
 release-scout-mcp/

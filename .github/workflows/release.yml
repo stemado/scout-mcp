@@ -46,6 +46,10 @@ jobs:
   publish-npm:
     needs: test
     runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
     defaults:
       run:
         working-directory: npm
@@ -59,5 +63,3 @@ jobs:
 
       - name: Publish to npm
         run: npm publish --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
