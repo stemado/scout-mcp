@@ -1,9 +1,11 @@
 """Tests for the annotated demo capture annotation overlay."""
 import sys
 import os
+import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
-from PIL import Image
+PIL = pytest.importorskip("PIL", reason="Pillow not installed")
+Image = PIL.Image
 from capture_annotated_demos import AnnotatedCapture
 
 
