@@ -4,6 +4,8 @@ MCP server for browser automation with anti-detection. Scout pages, find element
 
 Built on [botasaurus-driver](https://github.com/omkarcloud/botasaurus) for automatic fingerprint evasion and stealth browsing. Sites that block Playwright and Selenium see a normal browser session.
 
+<video src="assets/scout-demo.mp4" autoplay loop muted playsinline width="100%"></video>
+
 ---
 
 ## How It Works
