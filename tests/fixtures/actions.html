@@ -55,6 +55,16 @@
   <!-- Form element for inspect input_state -->
   <input id="checkbox-input" type="checkbox" checked />
 
+  <!-- File upload testing -->
+  <input id="file-input" type="file" />
+  <input id="multi-file-input" type="file" multiple />
+  <span id="file-result"></span>
+  <script>
+    document.getElementById('file-input').addEventListener('change', function(e) {
+      document.getElementById('file-result').textContent = e.target.files[0]?.name || '';
+    });
+  </script>
+
   <!-- Delayed element for wait-for-element -->
   <script>
     setTimeout(function() {

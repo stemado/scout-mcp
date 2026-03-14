@@ -574,3 +574,46 @@ def test_inspect_nonexistent(session):
     """Inspect a nonexistent element returns found=False."""
     inspection = inspect_element(session.driver, "#nope")
     assert inspection.found is False
+
+
+# ---------------------------------------------------------------------------
+# execute_action — upload_file
+# ---------------------------------------------------------------------------
+
+
+def test_upload_file_sets_file(session, tmp_path):
+    """Upload a file to an <input type='file'> and verify via JS."""
+    # Create a temporary test file
+    test_file = tmp_path / "test-upload.txt"
+    test_file.write_text("test file content")
+
+    result, record = execute_action(
+        session.driver, "upload_file",
+        selector="#file-input",
+        value=str(test_file),
+        wait_after=100,
+    )
+
+    assert result.success is True
+    assert record.action == "upload_file"
+    assert "test-upload.txt" in result.action_performed
+
+    # Verify the file was actually set on the input element
+    js_result, _ = run_javascript(
+        session.driver,
+        "return document.getElementById('file-input').files[0]?.name"
+    )
+    assert js_result.result == "test-upload.txt"
+
+
+def test_upload_file_nonexistent_file(session):
+    """Upload a nonexistent file returns error."""
+    result, record = execute_action(
+        session.driver, "upload_file",
+        selector="#file-input",
+        value="/nonexistent/file.pdf",
+        wait_after=0,
+    )
+
+    assert result.success is False
+    assert "not found" in result.error.lower()
