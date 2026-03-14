@@ -75,8 +75,8 @@ export const BrowserPage: React.FC<BrowserPageProps> = ({ scene }) => {
   }
 
   if (scene === "form-fill") {
-    const emailProgress = interpolate(frame, [0, 40], [0, 22], { extrapolateRight: "clamp" });
-    const passwordProgress = interpolate(frame, [50, 80], [0, 16], { extrapolateRight: "clamp" });
+    const emailProgress = interpolate(frame, [0, 40], [0, 22], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+    const passwordProgress = interpolate(frame, [50, 80], [0, 16], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
     const buttonPressed = frame > 120;
     const dashboardFade = interpolate(frame, [130, 160], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
 
