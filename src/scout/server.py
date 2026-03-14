@@ -317,7 +317,7 @@ async def find_elements(
 @mcp.tool()
 async def execute_action_tool(
     session_id: str,
-    action: Literal["click", "type", "select", "navigate", "scroll", "wait", "press_key", "hover", "clear"],
+    action: Literal["click", "type", "select", "navigate", "scroll", "wait", "press_key", "hover", "clear", "upload_file"],
     selector: str | None = None,
     value: str | None = None,
     frame_context: str | None = None,
@@ -333,7 +333,7 @@ async def execute_action_tool(
         session_id: Active session ID.
         action: The action to perform.
         selector: CSS selector of the target element. Required for click, type, select, hover, clear.
-        value: Text to type, option to select, URL to navigate to, key to press, or wait duration.
+        value: Text to type, option to select, URL to navigate to, key to press, wait duration, or file path to upload.
         frame_context: Iframe selector path for the target element. Use 'main' or omit for top-level.
         wait_after: Milliseconds to wait after action completes. Default: 500.
     """
