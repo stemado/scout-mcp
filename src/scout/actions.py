@@ -20,7 +20,7 @@ from .models import (
     ScreenshotRecord,
     ScreenshotResult,
 )
-from .validation import validate_url
+from .validation import validate_file_path, validate_url
 
 if TYPE_CHECKING:
     from botasaurus_driver import Driver
@@ -50,7 +50,7 @@ def execute_action(
 
     Args:
         driver: Active botasaurus-driver instance.
-        action: One of: click, type, select, navigate, scroll, wait, press_key, hover, clear.
+        action: One of: click, type, select, navigate, scroll, wait, press_key, hover, clear, upload_file.
         selector: CSS selector for the target element (required for most actions).
         value: Context-dependent value (text to type, URL to navigate, key to press, etc.).
         frame_context: Iframe selector path, or None/'main' for top-level page.
@@ -194,6 +194,15 @@ def execute_action(
                 _require(selector, "selector required for clear")
                 target.clear(selector)
                 action_desc = f"Cleared '{selector}'"
+
+            case "upload_file":
+                _require(selector, "selector required for upload_file")
+                _require(value, "file path required for upload_file")
+                validate_file_path(value)
+                from pathlib import Path
+                resolved = str(Path(value).resolve())
+                target.upload_file(selector, resolved)
+                action_desc = f"Uploaded file: {Path(value).name}"
 
             case _:
                 raise ValueError(f"Unknown action: {action}")
