@@ -5,7 +5,7 @@ import { BrowserPage } from "./BrowserPage";
 import { uiFontFamily } from "../styles/fonts";
 
 type ShieldState = "solid" | "cracking" | "dissolved";
-type Scene = "landing" | "page-loaded" | "form-fill" | "export" | "schedule" | "outro";
+type Scene = "landing" | "page-loaded" | "form-fill" | "pricing" | "export" | "schedule" | "outro";
 
 interface BrowserProps {
   scene: Scene;

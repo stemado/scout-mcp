@@ -32,7 +32,7 @@ export const Schedule: React.FC = () => {
         9:00 AM
       </div>
       <div style={{ fontSize: 14, color: "#6c7086", marginBottom: 16 }}>
-        daily-login-check — runs every day
+        daily-pricing — runs every day
       </div>
       <div style={{
         display: "grid",

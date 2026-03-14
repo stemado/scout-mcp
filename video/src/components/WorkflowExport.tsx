@@ -5,7 +5,6 @@ import { terminalFontFamily, uiFontFamily } from "../styles/fonts";
 const FILES = [
   { name: "login-workflow.py", icon: "\u{1F40D}" },
   { name: "login-workflow.json", icon: "\u{1F4C4}" },
-  { name: ".env.example", icon: "\u{1F511}" },
 ];
 
 const CODE_PREVIEW = `from scout import Workflow
@@ -19,8 +18,19 @@ export const WorkflowExport: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const slideIn = spring({ fps, frame, config: { damping: 80, stiffness: 100 } });
-  const translateX = interpolate(slideIn, [0, 1], [400, 0]);
+  const fadeIn = spring({ fps, frame, config: { damping: 100 } });
+
+  // Files appear one by one, synced to terminal mentions
+  // Terminal: "✓ 6 actions recorded" at ~frame 70, then files at ~82 and ~94
+  const file1Appear = 75;
+  const file2Appear = 90;
+
+  // Code preview fades in after both files are listed
+  const codeAppear = 105;
+  const codeFade = interpolate(frame - codeAppear, [0, 15], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
 
   return (
     <div style={{
@@ -28,27 +38,47 @@ export const WorkflowExport: React.FC = () => {
       inset: 0,
       display: "flex",
       flexDirection: "column",
-      padding: 24,
-      transform: `translateX(${translateX}px)`,
-      backgroundColor: "#1e1e2e",
+      padding: 32,
+      backgroundColor: "#11111b",
+      opacity: fadeIn,
     }}>
-      <div style={{ marginBottom: 20 }}>
-        <div style={{ fontFamily: uiFontFamily, fontSize: 14, color: "#6c7086", marginBottom: 12 }}>
-          workflows/login/
-        </div>
+      {/* Header */}
+      <div style={{
+        fontFamily: uiFontFamily,
+        fontSize: 16,
+        fontWeight: 600,
+        color: "#cdd6f4",
+        marginBottom: 8,
+      }}>
+        Exported Workflow
+      </div>
+      <div style={{
+        fontFamily: uiFontFamily,
+        fontSize: 13,
+        color: "#6c7086",
+        marginBottom: 20,
+      }}>
+        workflows/login/
+      </div>
+
+      {/* File tree — files appear sequentially */}
+      <div style={{ marginBottom: 24 }}>
         {FILES.map((file, i) => {
-          const fileDelay = i * 15;
-          const fileOpacity = interpolate(frame - fileDelay, [10, 20], [0, 1], {
-            extrapolateLeft: "clamp",
-            extrapolateRight: "clamp",
-          });
+          const appearFrame = i === 0 ? file1Appear : file2Appear;
+          const fileScale = frame >= appearFrame ? spring({
+            fps,
+            frame: frame - appearFrame,
+            config: { damping: 60, stiffness: 200 },
+          }) : 0;
           return (
             <div key={file.name} style={{
-              opacity: fileOpacity,
+              opacity: fileScale,
+              transform: `scale(${interpolate(fileScale, [0, 1], [0.8, 1])})`,
+              transformOrigin: "left center",
               fontFamily: terminalFontFamily,
-              fontSize: 16,
-              color: "#cdd6f4",
-              padding: "4px 0 4px 20px",
+              fontSize: 18,
+              color: "#a6e3a1",
+              padding: "6px 0 6px 16px",
             }}>
               {file.icon} {file.name}
             </div>
@@ -56,23 +86,25 @@ export const WorkflowExport: React.FC = () => {
         })}
       </div>
 
+      {/* Code preview — appears after files are listed */}
       <div style={{
         flex: 1,
         backgroundColor: "#181825",
         borderRadius: 8,
         border: "1px solid #313244",
-        padding: 16,
+        padding: 20,
         overflow: "hidden",
+        opacity: codeFade,
       }}>
-        <div style={{ fontFamily: uiFontFamily, fontSize: 11, color: "#6c7086", marginBottom: 8 }}>
+        <div style={{ fontFamily: uiFontFamily, fontSize: 12, color: "#6c7086", marginBottom: 10 }}>
           login-workflow.py
         </div>
         <pre style={{
           fontFamily: terminalFontFamily,
-          fontSize: 14,
+          fontSize: 15,
           color: "#cdd6f4",
           margin: 0,
-          lineHeight: 1.6,
+          lineHeight: 1.7,
           whiteSpace: "pre-wrap",
         }}>
           {CODE_PREVIEW}

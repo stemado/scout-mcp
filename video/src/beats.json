@@ -21,7 +21,7 @@
     {
       "id": "scout",
       "startFrame": 150,
-      "endFrame": 360,
+      "endFrame": 340,
       "terminal": {
         "lines": [
           { "text": "  Scout Report:", "color": "success", "delay": 5 },
@@ -38,8 +38,8 @@
     },
     {
       "id": "interact",
-      "startFrame": 360,
-      "endFrame": 540,
+      "startFrame": 340,
+      "endFrame": 500,
       "terminal": {
         "lines": [
           { "text": "$ fill_secret(\"#email\", env=\"EMAIL\")", "color": "command", "framesPerChar": 1 },
@@ -47,36 +47,48 @@
           { "text": "$ fill_secret(\"#password\", env=\"PASSWORD\")", "color": "command", "framesPerChar": 1 },
           { "text": "  \u2713 Typed 16 chars (hidden)", "color": "success", "delay": 6 },
           { "text": "$ execute_action(\"click\", \"#login-btn\")", "color": "command", "framesPerChar": 1 },
-          { "text": "  \u2713 Clicked — page loaded", "color": "success", "delay": 5 }
+          { "text": "  \u2713 Clicked \u2014 page loaded", "color": "success", "delay": 5 }
         ]
       },
       "browser": { "scene": "form-fill", "shieldState": "dissolved" }
     },
     {
-      "id": "export",
-      "startFrame": 540,
-      "endFrame": 690,
+      "id": "captured",
+      "startFrame": 500,
+      "endFrame": 590,
       "terminal": {
         "lines": [
-          { "text": "  Found pricing data for 3 plans:", "color": "muted", "delay": 8 },
-          { "text": "    Enterprise $499/mo | Pro $199/mo | Starter $49/mo", "color": "data", "delay": 10 },
+          { "text": "", "color": "default", "delay": 5 },
+          { "text": "  Found pricing data for 3 plans:", "color": "muted", "delay": 10 },
+          { "text": "    Enterprise $499/mo | Pro $199/mo | Starter $49/mo", "color": "data", "delay": 15 }
+        ]
+      },
+      "browser": { "scene": "pricing", "shieldState": "dissolved" }
+    },
+    {
+      "id": "export",
+      "startFrame": 590,
+      "endFrame": 720,
+      "terminal": {
+        "lines": [
           { "text": "", "color": "default", "delay": 8 },
           { "text": "> Export this as a workflow I can run daily", "color": "user", "framesPerChar": 1 },
-          { "text": "", "color": "default", "delay": 8 },
+          { "text": "", "color": "default", "delay": 10 },
           { "text": "$ get_session_history()", "color": "command", "framesPerChar": 2 },
-          { "text": "  \u2713 6 actions recorded", "color": "success", "delay": 10 },
-          { "text": "  \u2713 login-workflow.py", "color": "success", "delay": 8 },
-          { "text": "  \u2713 login-workflow.json", "color": "success", "delay": 8 }
+          { "text": "  \u2713 6 actions recorded", "color": "success", "delay": 15 },
+          { "text": "  \u2713 login-workflow.py", "color": "success", "delay": 12 },
+          { "text": "  \u2713 login-workflow.json", "color": "success", "delay": 12 }
         ]
       },
       "browser": { "scene": "export", "shieldState": "dissolved" }
     },
     {
       "id": "schedule",
-      "startFrame": 690,
+      "startFrame": 720,
       "endFrame": 840,
       "terminal": {
         "lines": [
+          { "text": "", "color": "default", "delay": 5 },
           { "text": "> Schedule it every morning at 9", "color": "user", "framesPerChar": 1 },
           { "text": "", "color": "default", "delay": 10 },
           { "text": "$ schedule_create(", "color": "command", "framesPerChar": 2 },
