@@ -42,14 +42,14 @@
       "endFrame": 540,
       "terminal": {
         "lines": [
-          { "text": "$ fill_secret(selector=\"#email\", env_var=\"EMAIL\")", "color": "command", "framesPerChar": 1 },
-          { "text": "  \u2713 Typed 22 characters (value hidden)", "color": "success", "delay": 15 },
-          { "text": "", "color": "default", "delay": 5 },
-          { "text": "$ fill_secret(selector=\"#password\", env_var=\"PASSWORD\")", "color": "command", "framesPerChar": 1 },
-          { "text": "  \u2713 Typed 16 characters (value hidden)", "color": "success", "delay": 15 },
-          { "text": "", "color": "default", "delay": 5 },
-          { "text": "$ execute_action(action=\"click\", selector=\"#login-btn\")", "color": "command", "framesPerChar": 1 },
-          { "text": "  \u2713 Clicked", "color": "success", "delay": 10 }
+          { "text": "$ fill_secret(\"#email\", env=\"EMAIL\")", "color": "command", "framesPerChar": 1 },
+          { "text": "  \u2713 Typed 22 chars (hidden)", "color": "success", "delay": 8 },
+          { "text": "", "color": "default", "delay": 3 },
+          { "text": "$ fill_secret(\"#password\", env=\"PASSWORD\")", "color": "command", "framesPerChar": 1 },
+          { "text": "  \u2713 Typed 16 chars (hidden)", "color": "success", "delay": 8 },
+          { "text": "", "color": "default", "delay": 3 },
+          { "text": "$ execute_action(\"click\", \"#login-btn\")", "color": "command", "framesPerChar": 1 },
+          { "text": "  \u2713 Clicked", "color": "success", "delay": 5 }
         ]
       },
       "browser": { "scene": "form-fill", "shieldState": "dissolved" }

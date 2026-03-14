@@ -20,7 +20,7 @@ export const ScoutDemo: React.FC = () => {
             <AbsoluteFill>
               {beats.filter(b => b.id !== "outro").map((beat) => (
                 <Sequence key={beat.id} from={beat.startFrame} durationInFrames={beat.endFrame - beat.startFrame}>
-                  <Browser scene={beat.browser.scene as any} shieldState={beat.browser.shieldState as any}>
+                  <Browser scene={beat.browser.scene as any} shieldState={beat.browser.shieldState as any} animate={beat.id === "launch"}>
                     {beat.id === "export" && <WorkflowExport />}
                     {beat.id === "schedule" && <Schedule />}
                   </Browser>

@@ -10,14 +10,15 @@ type Scene = "landing" | "page-loaded" | "form-fill" | "export" | "schedule" | "
 interface BrowserProps {
   scene: Scene;
   shieldState: ShieldState;
+  animate?: boolean;
   children?: React.ReactNode;
 }
 
-export const Browser: React.FC<BrowserProps> = ({ scene, shieldState, children }) => {
+export const Browser: React.FC<BrowserProps> = ({ scene, shieldState, animate = false, children }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const enterScale = spring({ fps, frame, config: { damping: 100 } });
+  const enterScale = animate ? spring({ fps, frame, config: { damping: 100 } }) : 1;
   const scale = 0.8 + 0.2 * enterScale;
 
   return (

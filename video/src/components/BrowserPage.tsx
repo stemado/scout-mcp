@@ -33,6 +33,12 @@ export const BrowserPage: React.FC<BrowserPageProps> = ({ scene }) => {
 
   if (scene === "page-loaded") {
     const fadeIn = spring({ fps, frame, config: { damping: 200 } });
+    // Login button pulses when find_elements locates it (around frame 140+ into this beat)
+    const pulseStart = 140;
+    const pulseProgress = frame > pulseStart ? spring({ fps, frame: frame - pulseStart, config: { damping: 60, stiffness: 300 } }) : 0;
+    const buttonGlow = interpolate(pulseProgress, [0, 0.5, 1], [0, 8, 0]);
+    const buttonScale = interpolate(pulseProgress, [0, 0.3, 1], [1, 1.05, 1]);
+
     return (
       <div style={{ opacity: fadeIn, padding: 30, fontFamily: uiFontFamily, color: "#cdd6f4" }}>
         <div style={{ display: "flex", gap: 20, marginBottom: 30, fontSize: 14, color: "#6c7086" }}>
@@ -58,6 +64,8 @@ export const BrowserPage: React.FC<BrowserPageProps> = ({ scene }) => {
             fontSize: 14,
             fontWeight: 600,
             color: "#1e1e2e",
+            transform: `scale(${buttonScale})`,
+            boxShadow: buttonGlow > 0 ? `0 0 ${buttonGlow}px ${buttonGlow}px rgba(137, 180, 250, 0.5)` : "none",
           }}>
             Login
           </div>

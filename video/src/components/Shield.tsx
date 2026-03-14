@@ -29,7 +29,7 @@ export const Shield: React.FC<ShieldProps> = ({ state, size = 40 }) => {
   const crackDashoffset = interpolate(crackProgress, [0, 1], [crackLength, 0]);
 
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" style={{ opacity, transition: "opacity 0.3s" }}>
+    <svg width={size} height={size} viewBox="0 0 24 24" style={{ opacity }}>
       <path
         d="M12 2L3 7v5c0 5.25 3.82 10.17 9 11.38C17.18 22.17 21 17.25 21 12V7L12 2z"
         fill={shieldColor}
