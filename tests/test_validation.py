@@ -2,7 +2,12 @@
 
 import pytest
 
-from scout.validation import validate_directory_path, validate_regex_pattern, validate_url
+from scout.validation import (
+    validate_directory_path,
+    validate_file_path,
+    validate_regex_pattern,
+    validate_url,
+)
 
 
 # --- URL validation ---
@@ -134,3 +139,29 @@ class TestValidateRegexPattern:
     def test_allows_max_length(self):
         result = validate_regex_pattern("a" * 500)
         assert result is not None
+
+
+# --- File path validation ---
+
+
+class TestValidateFilePath:
+    def test_accepts_existing_file(self, tmp_path):
+        f = tmp_path / "test.pdf"
+        f.write_text("fake pdf")
+        validate_file_path(str(f))  # should not raise
+
+    def test_rejects_nonexistent_file(self):
+        with pytest.raises(ValueError, match="File not found"):
+            validate_file_path("/nonexistent/path/file.txt")
+
+    def test_rejects_directory(self, tmp_path):
+        with pytest.raises(ValueError, match="not a regular file"):
+            validate_file_path(str(tmp_path))
+
+    def test_rejects_empty_path(self):
+        with pytest.raises(ValueError, match="File path required"):
+            validate_file_path("")
+
+    def test_rejects_none_path(self):
+        with pytest.raises(ValueError, match="File path required"):
+            validate_file_path(None)

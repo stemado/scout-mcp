@@ -126,3 +126,23 @@ def validate_regex_pattern(pattern: str) -> re.Pattern:
         return re.compile(pattern)
     except re.error as e:
         raise ValueError(f"Invalid regex pattern: {e}") from e
+
+
+# --- File path validation ---
+
+
+def validate_file_path(path: str | None) -> None:
+    """Validate that a file path points to an existing regular file.
+
+    Raises ValueError if the path is empty, doesn't exist, or is not a regular file.
+    """
+    if not path:
+        raise ValueError("File path required for upload_file action")
+
+    from pathlib import Path
+
+    p = Path(path)
+    if not p.exists():
+        raise ValueError(f"File not found: {path}")
+    if not p.is_file():
+        raise ValueError(f"Path is not a regular file: {path}")
