@@ -64,3 +64,40 @@ jobs:
 
       - name: Publish to npm
         run: npm publish --access public
+
+  github-release:
+    needs: [publish-pypi, publish-npm]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          PREV_TAG=$(git tag --sort=-v:refname | sed -n '2p')
+          if [ -n "$PREV_TAG" ]; then
+            LOG=$(git log --pretty=format:"- %s" "$PREV_TAG"..HEAD -- ':!.github')
+          else
+            LOG=$(git log --pretty=format:"- %s" -- ':!.github')
+          fi
+          {
+            echo "body<<EOF"
+            echo "$LOG"
+            echo ""
+            echo "**Install:**"
+            echo '```bash'
+            echo "pip install scout-mcp-server==${GITHUB_REF_NAME#v}"
+            echo "# or"
+            echo "npx -y @stemado/scout-mcp@${GITHUB_REF_NAME#v}"
+            echo '```'
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes "${{ steps.changelog.outputs.body }}"
+        env:
+          GH_TOKEN: ${{ github.token }}
