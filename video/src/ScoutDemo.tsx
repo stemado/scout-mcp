@@ -33,14 +33,19 @@ export const ScoutDemo: React.FC = () => {
                 </Sequence>
               ))}
 
-              {/* Export: dark canvas, no browser chrome */}
-              {beats.filter(b => b.id === "export").map((beat) => (
-                <Sequence key={beat.id} from={beat.startFrame} durationInFrames={beat.endFrame - beat.startFrame}>
-                  <AbsoluteFill style={{ backgroundColor: "#11111b" }}>
-                    <WorkflowExport />
-                  </AbsoluteFill>
-                </Sequence>
-              ))}
+              {/* Export + pre-schedule: dark canvas with workflow files
+                  (stays visible while "Schedule it..." types in terminal) */}
+              {(() => {
+                const exportBeat = beats.find(b => b.id === "export")!;
+                const preSchBeat = beats.find(b => b.id === "pre-schedule")!;
+                return (
+                  <Sequence from={exportBeat.startFrame} durationInFrames={preSchBeat.endFrame - exportBeat.startFrame}>
+                    <AbsoluteFill style={{ backgroundColor: "#11111b" }}>
+                      <WorkflowExport />
+                    </AbsoluteFill>
+                  </Sequence>
+                );
+              })()}
 
               {/* Schedule: dark canvas, no browser chrome */}
               {beats.filter(b => b.id === "schedule").map((beat) => (

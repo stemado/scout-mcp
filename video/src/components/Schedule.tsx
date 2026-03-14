@@ -49,7 +49,7 @@ export const Schedule: React.FC = () => {
             {d}
           </div>
         ))}
-        {Array.from({ length: 14 }, (_, i) => {
+        {Array.from({ length: 7 }, (_, i) => {
           const checkDelay = 30 + i * 6;
           const checkProgress = spring({
             fps,

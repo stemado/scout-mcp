@@ -1,6 +1,6 @@
 {
   "fps": 30,
-  "durationInFrames": 1050,
+  "durationInFrames": 1110,
   "beats": [
     {
       "id": "launch",
@@ -83,7 +83,7 @@
     {
       "id": "export",
       "startFrame": 740,
-      "endFrame": 860,
+      "endFrame": 870,
       "terminal": {
         "lines": [
           { "text": "  \u2713 login-workflow.py", "color": "success", "delay": 10 },
@@ -93,14 +93,24 @@
       "browser": { "scene": "export", "shieldState": "dissolved" }
     },
     {
-      "id": "schedule",
-      "startFrame": 860,
-      "endFrame": 980,
+      "id": "pre-schedule",
+      "startFrame": 870,
+      "endFrame": 940,
       "terminal": {
         "lines": [
           { "text": "", "color": "default", "delay": 5 },
-          { "text": "> Schedule it every morning at 9", "color": "user", "framesPerChar": 1 },
-          { "text": "", "color": "default", "delay": 10 },
+          { "text": "> Schedule it every morning at 9", "color": "user", "framesPerChar": 1 }
+        ]
+      },
+      "browser": { "scene": "export", "shieldState": "dissolved" }
+    },
+    {
+      "id": "schedule",
+      "startFrame": 940,
+      "endFrame": 1040,
+      "terminal": {
+        "lines": [
+          { "text": "", "color": "default", "delay": 5 },
           { "text": "$ schedule_create(", "color": "command", "framesPerChar": 2 },
           { "text": "    name=\"daily-pricing\",", "color": "command", "framesPerChar": 1 },
           { "text": "    cron=\"0 9 * * *\"", "color": "command", "framesPerChar": 1 },
@@ -112,8 +122,8 @@
     },
     {
       "id": "outro",
-      "startFrame": 980,
-      "endFrame": 1050,
+      "startFrame": 1040,
+      "endFrame": 1110,
       "terminal": { "lines": [] },
       "browser": { "scene": "outro", "shieldState": "dissolved" }
     }
