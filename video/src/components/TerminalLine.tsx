@@ -3,11 +3,13 @@ import { interpolate, useCurrentFrame } from "remotion";
 import { terminalFontFamily } from "../styles/fonts";
 
 const COLOR_MAP: Record<string, string> = {
-  command: "#a6e3a1",
-  success: "#a6e3a1",
-  default: "#cdd6f4",
-  muted: "#6c7086",
-  value: "#f9e2af",
+  command: "#a6e3a1",   // green — tool calls
+  success: "#a6e3a1",   // green — checkmarks
+  default: "#cdd6f4",   // light gray — output
+  muted: "#6c7086",     // dim — progress text
+  value: "#f9e2af",     // yellow — values
+  user: "#89b4fa",      // blue — human prompts
+  data: "#f9e2af",      // yellow — captured data
 };
 
 interface TerminalLineProps {

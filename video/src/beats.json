@@ -8,11 +8,12 @@
       "endFrame": 150,
       "terminal": {
         "lines": [
+          { "text": "> Log into the pricing portal and grab today's rates", "color": "user", "framesPerChar": 1 },
+          { "text": "", "color": "default", "delay": 15 },
           { "text": "$ launch_session(headless=false)", "color": "command", "framesPerChar": 2 },
-          { "text": "\u2713 Browser launched", "color": "success", "delay": 20 },
-          { "text": "", "color": "default", "delay": 5 },
-          { "text": "$ scout_page_tool()", "color": "command", "framesPerChar": 2 },
-          { "text": "  Scanning page structure...", "color": "muted", "delay": 15 }
+          { "text": "  \u2713 Browser launched", "color": "success", "delay": 15 },
+          { "text": "", "color": "default", "delay": 3 },
+          { "text": "$ scout_page_tool()", "color": "command", "framesPerChar": 2 }
         ]
       },
       "browser": { "scene": "landing", "shieldState": "solid" }
@@ -23,15 +24,14 @@
       "endFrame": 360,
       "terminal": {
         "lines": [
-          { "text": "Scout Report:", "color": "success", "delay": 10 },
-          { "text": "  Elements: 47 found", "color": "default", "delay": 8 },
-          { "text": "  Forms: 2 (login, search)", "color": "default", "delay": 8 },
-          { "text": "  Buttons: 8", "color": "default", "delay": 8 },
-          { "text": "  Links: 23", "color": "default", "delay": 8 },
-          { "text": "  Inputs: 6", "color": "default", "delay": 8 },
-          { "text": "", "color": "default", "delay": 10 },
+          { "text": "  Scout Report:", "color": "success", "delay": 5 },
+          { "text": "    Elements: 47 | Forms: 2 | Buttons: 8", "color": "default", "delay": 8 },
+          { "text": "    Found login form at #signin", "color": "default", "delay": 8 },
+          { "text": "", "color": "default", "delay": 8 },
+          { "text": "  I see a login form. Signing in now.", "color": "muted", "delay": 10 },
+          { "text": "", "color": "default", "delay": 5 },
           { "text": "$ find_elements(text=\"Login\")", "color": "command", "framesPerChar": 2 },
-          { "text": "  Found: button#login-btn", "color": "success", "delay": 20 }
+          { "text": "  Found: button#login-btn", "color": "success", "delay": 15 }
         ]
       },
       "browser": { "scene": "page-loaded", "shieldState": "cracking" }
@@ -43,13 +43,11 @@
       "terminal": {
         "lines": [
           { "text": "$ fill_secret(\"#email\", env=\"EMAIL\")", "color": "command", "framesPerChar": 1 },
-          { "text": "  \u2713 Typed 22 chars (hidden)", "color": "success", "delay": 8 },
-          { "text": "", "color": "default", "delay": 3 },
+          { "text": "  \u2713 Typed 22 chars (hidden)", "color": "success", "delay": 6 },
           { "text": "$ fill_secret(\"#password\", env=\"PASSWORD\")", "color": "command", "framesPerChar": 1 },
-          { "text": "  \u2713 Typed 16 chars (hidden)", "color": "success", "delay": 8 },
-          { "text": "", "color": "default", "delay": 3 },
+          { "text": "  \u2713 Typed 16 chars (hidden)", "color": "success", "delay": 6 },
           { "text": "$ execute_action(\"click\", \"#login-btn\")", "color": "command", "framesPerChar": 1 },
-          { "text": "  \u2713 Clicked", "color": "success", "delay": 5 }
+          { "text": "  \u2713 Clicked — page loaded", "color": "success", "delay": 5 }
         ]
       },
       "browser": { "scene": "form-fill", "shieldState": "dissolved" }
@@ -60,13 +58,15 @@
       "endFrame": 690,
       "terminal": {
         "lines": [
+          { "text": "  Found pricing data for 3 plans:", "color": "muted", "delay": 8 },
+          { "text": "    Enterprise $499/mo | Pro $199/mo | Starter $49/mo", "color": "data", "delay": 10 },
+          { "text": "", "color": "default", "delay": 8 },
+          { "text": "> Export this as a workflow I can run daily", "color": "user", "framesPerChar": 1 },
+          { "text": "", "color": "default", "delay": 8 },
           { "text": "$ get_session_history()", "color": "command", "framesPerChar": 2 },
-          { "text": "  \u2713 5 actions recorded", "color": "success", "delay": 20 },
-          { "text": "", "color": "default", "delay": 10 },
-          { "text": "  Exporting workflow...", "color": "muted", "delay": 15 },
-          { "text": "  \u2713 login-workflow.py", "color": "success", "delay": 10 },
-          { "text": "  \u2713 login-workflow.json", "color": "success", "delay": 10 },
-          { "text": "  \u2713 .env.example", "color": "success", "delay": 10 }
+          { "text": "  \u2713 6 actions recorded", "color": "success", "delay": 10 },
+          { "text": "  \u2713 login-workflow.py", "color": "success", "delay": 8 },
+          { "text": "  \u2713 login-workflow.json", "color": "success", "delay": 8 }
         ]
       },
       "browser": { "scene": "export", "shieldState": "dissolved" }
@@ -77,11 +77,13 @@
       "endFrame": 840,
       "terminal": {
         "lines": [
+          { "text": "> Schedule it every morning at 9", "color": "user", "framesPerChar": 1 },
+          { "text": "", "color": "default", "delay": 10 },
           { "text": "$ schedule_create(", "color": "command", "framesPerChar": 2 },
-          { "text": "    name=\"daily-login-check\",", "color": "command", "framesPerChar": 1 },
+          { "text": "    name=\"daily-pricing\",", "color": "command", "framesPerChar": 1 },
           { "text": "    cron=\"0 9 * * *\"", "color": "command", "framesPerChar": 1 },
-          { "text": "  )", "color": "command", "delay": 5 },
-          { "text": "  \u2713 Scheduled: daily at 9:00 AM", "color": "success", "delay": 20 }
+          { "text": "  )", "color": "command", "delay": 3 },
+          { "text": "  \u2713 Scheduled: daily at 9:00 AM", "color": "success", "delay": 15 }
         ]
       },
       "browser": { "scene": "schedule", "shieldState": "dissolved" }
