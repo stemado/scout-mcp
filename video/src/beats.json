@@ -1,0 +1,97 @@
+{
+  "fps": 30,
+  "durationInFrames": 900,
+  "beats": [
+    {
+      "id": "launch",
+      "startFrame": 0,
+      "endFrame": 150,
+      "terminal": {
+        "lines": [
+          { "text": "$ launch_session(headless=false)", "color": "command", "framesPerChar": 2 },
+          { "text": "\u2713 Browser launched", "color": "success", "delay": 20 },
+          { "text": "", "color": "default", "delay": 5 },
+          { "text": "$ scout_page_tool()", "color": "command", "framesPerChar": 2 },
+          { "text": "  Scanning page structure...", "color": "muted", "delay": 15 }
+        ]
+      },
+      "browser": { "scene": "landing", "shieldState": "solid" }
+    },
+    {
+      "id": "scout",
+      "startFrame": 150,
+      "endFrame": 360,
+      "terminal": {
+        "lines": [
+          { "text": "Scout Report:", "color": "success", "delay": 10 },
+          { "text": "  Elements: 47 found", "color": "default", "delay": 8 },
+          { "text": "  Forms: 2 (login, search)", "color": "default", "delay": 8 },
+          { "text": "  Buttons: 8", "color": "default", "delay": 8 },
+          { "text": "  Links: 23", "color": "default", "delay": 8 },
+          { "text": "  Inputs: 6", "color": "default", "delay": 8 },
+          { "text": "", "color": "default", "delay": 10 },
+          { "text": "$ find_elements(text=\"Login\")", "color": "command", "framesPerChar": 2 },
+          { "text": "  Found: button#login-btn", "color": "success", "delay": 20 }
+        ]
+      },
+      "browser": { "scene": "page-loaded", "shieldState": "cracking" }
+    },
+    {
+      "id": "interact",
+      "startFrame": 360,
+      "endFrame": 540,
+      "terminal": {
+        "lines": [
+          { "text": "$ fill_secret(selector=\"#email\", env_var=\"EMAIL\")", "color": "command", "framesPerChar": 1 },
+          { "text": "  \u2713 Typed 22 characters (value hidden)", "color": "success", "delay": 15 },
+          { "text": "", "color": "default", "delay": 5 },
+          { "text": "$ fill_secret(selector=\"#password\", env_var=\"PASSWORD\")", "color": "command", "framesPerChar": 1 },
+          { "text": "  \u2713 Typed 16 characters (value hidden)", "color": "success", "delay": 15 },
+          { "text": "", "color": "default", "delay": 5 },
+          { "text": "$ execute_action(action=\"click\", selector=\"#login-btn\")", "color": "command", "framesPerChar": 1 },
+          { "text": "  \u2713 Clicked", "color": "success", "delay": 10 }
+        ]
+      },
+      "browser": { "scene": "form-fill", "shieldState": "dissolved" }
+    },
+    {
+      "id": "export",
+      "startFrame": 540,
+      "endFrame": 690,
+      "terminal": {
+        "lines": [
+          { "text": "$ get_session_history()", "color": "command", "framesPerChar": 2 },
+          { "text": "  \u2713 5 actions recorded", "color": "success", "delay": 20 },
+          { "text": "", "color": "default", "delay": 10 },
+          { "text": "  Exporting workflow...", "color": "muted", "delay": 15 },
+          { "text": "  \u2713 login-workflow.py", "color": "success", "delay": 10 },
+          { "text": "  \u2713 login-workflow.json", "color": "success", "delay": 10 },
+          { "text": "  \u2713 .env.example", "color": "success", "delay": 10 }
+        ]
+      },
+      "browser": { "scene": "export", "shieldState": "dissolved" }
+    },
+    {
+      "id": "schedule",
+      "startFrame": 690,
+      "endFrame": 840,
+      "terminal": {
+        "lines": [
+          { "text": "$ schedule_create(", "color": "command", "framesPerChar": 2 },
+          { "text": "    name=\"daily-login-check\",", "color": "command", "framesPerChar": 1 },
+          { "text": "    cron=\"0 9 * * *\"", "color": "command", "framesPerChar": 1 },
+          { "text": "  )", "color": "command", "delay": 5 },
+          { "text": "  \u2713 Scheduled: daily at 9:00 AM", "color": "success", "delay": 20 }
+        ]
+      },
+      "browser": { "scene": "schedule", "shieldState": "dissolved" }
+    },
+    {
+      "id": "outro",
+      "startFrame": 840,
+      "endFrame": 900,
+      "terminal": { "lines": [] },
+      "browser": { "scene": "outro", "shieldState": "dissolved" }
+    }
+  ]
+}
