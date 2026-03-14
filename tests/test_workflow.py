@@ -276,6 +276,7 @@ def test_workflow_json_schema_all_action_types_valid():
         {"action": "press_key", "value": "Enter"},
         {"action": "hover", "selector": "#menu"},
         {"action": "clear", "selector": "#input"},
+        {"action": "upload_file", "selector": "#file", "value": "/path/to/file"},
     ]
     for i, config in enumerate(action_configs):
         step = WorkflowStep(order=i + 1, name=f"Step {i + 1}", **config)

@@ -332,7 +332,7 @@ async def execute_action_tool(
     Args:
         session_id: Active session ID.
         action: The action to perform.
-        selector: CSS selector of the target element. Required for click, type, select, hover, clear.
+        selector: CSS selector of the target element. Required for click, type, select, hover, clear, upload_file.
         value: Text to type, option to select, URL to navigate to, key to press, wait duration, or file path to upload.
         frame_context: Iframe selector path for the target element. Use 'main' or omit for top-level.
         wait_after: Milliseconds to wait after action completes. Default: 500.
