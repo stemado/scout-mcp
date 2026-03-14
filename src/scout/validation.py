@@ -95,8 +95,8 @@ def validate_directory_path(path: str) -> None:
     if not path:
         return
 
-    # Block absolute paths (Unix and Windows)
-    if os.path.isabs(path):
+    # Block absolute paths (Unix and Windows drive-letter paths)
+    if os.path.isabs(path) or re.match(r"^[A-Za-z]:[/\\]", path):
         raise ValueError(f"Directory path must be a relative path, got: {path}")
 
     # Block UNC paths
