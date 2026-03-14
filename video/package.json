@@ -1,0 +1,23 @@
+{
+  "name": "scout-demo-video",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "studio": "remotion studio",
+    "render": "remotion render src/index.ts ScoutDemo --output out/scout-demo.mp4 --codec h264 --crf 18",
+    "render:webm": "ffmpeg -i out/scout-demo.mp4 -c:v libvpx-vp9 -crf 30 -b:v 0 -an out/scout-demo.webm"
+  },
+  "dependencies": {
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "remotion": "^4.0.0",
+    "@remotion/cli": "^4.0.0",
+    "@remotion/bundler": "^4.0.0",
+    "@remotion/renderer": "^4.0.0",
+    "@remotion/google-fonts": "^4.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/react": "^18.3.0"
+  }
+}

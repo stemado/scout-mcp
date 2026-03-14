@@ -12,3 +12,5 @@ build/
 .worktrees/
 .superpowers/
 release-scout-mcp/
+video/out/
+video/node_modules/
