@@ -43,7 +43,7 @@ class WorkflowStep(BaseModel):
     action: Literal[
         "navigate", "click", "type", "select", "scroll", "wait",
         "wait_for_download", "wait_for_response",
-        "press_key", "hover", "clear",
+        "press_key", "hover", "clear", "upload_file",
     ]
 
     # Common optional fields
@@ -215,5 +215,7 @@ def _generate_step_name(action: ActionRecord) -> str:
             return f"Hover over '{action.selector}'"
         case "clear":
             return f"Clear '{action.selector}'"
+        case "upload_file":
+            return f"Upload file to '{action.selector}'"
         case _:
             return action.action.replace("_", " ").title()
