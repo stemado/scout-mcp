@@ -1,18 +1,23 @@
-import { AbsoluteFill } from "remotion";
+import { AbsoluteFill, Sequence } from "remotion";
 import { SplitScreen } from "./components/SplitScreen";
 import { Terminal } from "./components/Terminal";
+import { Browser } from "./components/Browser";
 import beatsData from "./beats.json";
 
 export const ScoutDemo: React.FC = () => {
+  const beats = beatsData.beats;
+
   return (
     <AbsoluteFill>
       <SplitScreen
-        left={<Terminal beats={beatsData.beats} />}
+        left={<Terminal beats={beats} />}
         right={
-          <AbsoluteFill style={{ backgroundColor: "#11111b" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#6c7086" }}>
-              Browser panel (coming soon)
-            </div>
+          <AbsoluteFill>
+            {beats.map((beat) => (
+              <Sequence key={beat.id} from={beat.startFrame} durationInFrames={beat.endFrame - beat.startFrame}>
+                <Browser scene={beat.browser.scene as any} shieldState={beat.browser.shieldState as any} />
+              </Sequence>
+            ))}
           </AbsoluteFill>
         }
       />
