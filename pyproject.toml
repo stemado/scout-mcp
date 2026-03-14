@@ -1,6 +1,6 @@
 [project]
 name = "scout-mcp-server"
-version = "1.0.0"
+version = "1.0.1"
 description = "MCP server for browser automation with anti-detection. Scout pages, find elements, interact with websites, and monitor network traffic."
 requires-python = ">=3.11"
 authors = [{name = "sdoherty"}]
