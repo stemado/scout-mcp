@@ -14,6 +14,8 @@ from .history import SessionHistoryTracker
 from .models import ConnectionMode, InteractiveElement, SessionCloseResult, SessionInfo
 from .network import NetworkMonitor
 from .screencast import ScreencastMonitor
+from .security import SecurityCounter
+from .security.navigation_guard import NavigationGuard
 from .validation import validate_directory_path, validate_url
 
 if TYPE_CHECKING:
@@ -35,6 +37,7 @@ class BrowserSession:
         user_agent: str | None = None,
         window_size: tuple[int, int] | None = None,
         connection_mode: ConnectionMode = ConnectionMode.LAUNCH,
+        allowed_domains: list[str] | None = None,
     ) -> None:
         self.session_id = uuid.uuid4().hex[:12]
         self.created_at = datetime.now(timezone.utc)
@@ -58,6 +61,13 @@ class BrowserSession:
 
         # Secret values registered by fill_secret — used to scrub tool responses.
         self._secret_values: set[str] = set()
+
+        # Security: per-session counters and domain scoping
+        self.security_counter = SecurityCounter()
+        self._allowed_domains: list[str] | None = allowed_domains
+
+        # Navigation guard (initialized on launch for extension mode)
+        self._navigation_guard: NavigationGuard | None = None
 
     def launch(self, url: str | None = None) -> SessionInfo:
         """Launch the browser and optionally navigate to an initial URL."""

@@ -13,14 +13,21 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import queue
 import random
+import secrets
 import threading
 import time
 import uuid
 from typing import TYPE_CHECKING, Any, Generator
 
+from .security.audit_log import log_security_event
+
 logger = logging.getLogger(__name__)
+
+# Auth timeout: extension must send auth token within this many seconds
+_AUTH_TIMEOUT = 2.0
 
 
 class _AttrDict(dict):
@@ -84,8 +91,19 @@ class ExtensionRelay:
 
         self._server = None
 
+        # --- Security: session token for auth ---
+        self._session_token: str = secrets.token_hex(32)
+        self._token_file: str | None = None
+
+        # --- Security: connection limit ---
+        self._active_connections: int = 0
+        self._connection_lock = threading.Lock()
+
+        # Security counter reference (set externally by session)
+        self._security_counter = None
+
     async def start(self) -> None:
-        """Start the WebSocket server."""
+        """Start the WebSocket server and write the session token file."""
         try:
             import websockets
             import websockets.asyncio.server
@@ -97,17 +115,102 @@ class ExtensionRelay:
 
         self._loop = asyncio.get_running_loop()
 
+        # Write session token to temp file for extension to read
+        self._token_file = f"/tmp/scout-extension-token-{os.getpid()}"
+        try:
+            with open(self._token_file, "w") as f:
+                f.write(self._session_token)
+            os.chmod(self._token_file, 0o600)  # Owner-only read/write
+        except Exception as e:
+            logger.warning("Failed to write token file: %s", e)
+
         self._server = await websockets.asyncio.server.serve(
             self._handle_connection,
             self._host,
             self._port,
+            process_request=self._check_origin,
         )
         logger.info("Extension relay server listening on ws://%s:%d%s",
                      self._host, self._port, DEFAULT_PATH)
 
+    async def _check_origin(self, connection, request):
+        """Validate Origin header on WebSocket upgrade requests.
+
+        Browser extensions send no Origin header. A web page attempting
+        to connect would send one — reject those connections.
+        """
+        origin = None
+        for header_name, header_value in request.headers.raw_items():
+            if header_name.lower() == "origin":
+                origin = header_value
+                break
+
+        if origin is not None:
+            log_security_event(
+                session_id=None,
+                event_type="ws_rejected",
+                severity="warning",
+                detail={"reason": "origin_present", "origin": origin},
+            )
+            if self._security_counter:
+                self._security_counter.increment("ws_rejected")
+            logger.warning("Rejected WebSocket connection with Origin: %s", origin)
+            from websockets.http11 import Response
+            return Response(403, "Forbidden", websockets.datastructures.Headers())
+
     async def _handle_connection(self, websocket) -> None:
         """Handle a WebSocket connection from the Chrome extension."""
-        logger.info("Extension connected from %s", websocket.remote_address)
+        logger.info("Extension connection attempt from %s", websocket.remote_address)
+
+        # --- Security: connection limit (exactly one concurrent connection) ---
+        with self._connection_lock:
+            if self._active_connections >= 1:
+                log_security_event(
+                    session_id=None,
+                    event_type="ws_rejected",
+                    severity="warning",
+                    detail={"reason": "connection_limit", "active": self._active_connections},
+                )
+                if self._security_counter:
+                    self._security_counter.increment("ws_rejected")
+                logger.warning("Rejected additional WebSocket connection (limit: 1)")
+                await websocket.close(1008, "Connection limit reached: only one extension connection allowed")
+                return
+
+        # --- Security: token authentication ---
+        try:
+            raw_auth = await asyncio.wait_for(websocket.recv(), timeout=_AUTH_TIMEOUT)
+            auth_msg = json.loads(raw_auth)
+            if auth_msg.get("type") != "auth" or auth_msg.get("token") != self._session_token:
+                log_security_event(
+                    session_id=None,
+                    event_type="ws_rejected",
+                    severity="warning",
+                    detail={"reason": "invalid_token"},
+                )
+                if self._security_counter:
+                    self._security_counter.increment("ws_rejected")
+                logger.warning("Rejected WebSocket connection: invalid auth token")
+                await websocket.close(1008, "Invalid authentication token")
+                return
+        except (asyncio.TimeoutError, json.JSONDecodeError, Exception) as e:
+            log_security_event(
+                session_id=None,
+                event_type="ws_rejected",
+                severity="warning",
+                detail={"reason": "auth_timeout_or_error", "error": str(e)},
+            )
+            if self._security_counter:
+                self._security_counter.increment("ws_rejected")
+            logger.warning("Rejected WebSocket connection: auth failed (%s)", e)
+            await websocket.close(1008, "Authentication required within 2 seconds")
+            return
+
+        logger.info("Extension authenticated successfully from %s", websocket.remote_address)
+
+        with self._connection_lock:
+            self._active_connections += 1
+
         self._ws = websocket
         self._connected.set()
 
@@ -151,6 +254,8 @@ class ExtensionRelay:
         finally:
             self._ws = None
             self._connected.clear()
+            with self._connection_lock:
+                self._active_connections = max(0, self._active_connections - 1)
             # Wake up any pending requests with an error
             with self._lock:
                 for req_id, event in self._pending.items():
@@ -256,14 +361,31 @@ class ExtensionRelay:
         with self._event_handler_lock:
             self._event_handlers.setdefault(method, []).append(callback)
 
+    @property
+    def session_token(self) -> str:
+        """Return the session token for the extension to read."""
+        return self._session_token
+
+    @property
+    def token_file_path(self) -> str | None:
+        """Return the path to the token file."""
+        return self._token_file
+
     async def stop(self) -> None:
-        """Shut down the WebSocket server."""
+        """Shut down the WebSocket server and clean up the token file."""
         if self._server:
             self._server.close()
             await self._server.wait_closed()
             self._server = None
         self._ws = None
         self._connected.clear()
+        # Clean up token file
+        if self._token_file:
+            try:
+                os.unlink(self._token_file)
+            except OSError:
+                pass
+            self._token_file = None
 
 
 class _FakeTab:
