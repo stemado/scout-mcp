@@ -17,17 +17,9 @@ Scout supports two connection modes:
 4. Select the `extension/` directory from the Scout repository
 5. The Scout MCP Bridge icon appears in your toolbar
 
-### 2. Register the Extension ID
+### 2. Start the Scout MCP Server
 
-1. Open `chrome://extensions` in Chrome
-2. Copy the **ID** shown under the Scout MCP Bridge card (a 32-character string like `abcdefghijklmnopabcdefghijklmnop`)
-3. Add the extension ID to your `.env` file:
-   ```
-   SCOUT_EXTENSION_ID=<your-extension-id>
-   ```
-4. Start (or restart) the Scout MCP server — it auto-registers the Native Messaging host manifest for Chrome
-
-> **Note:** The extension ID is tied to the extension's absolute directory path. If you move the `extension/` folder, Chrome assigns a new ID and you must update `SCOUT_EXTENSION_ID` accordingly.
+Start (or restart) the Scout MCP server — it auto-registers the Native Messaging host manifest for Chrome. The extension has a pinned `key` in `manifest.json`, so every installation gets the same deterministic extension ID. No manual ID copying or environment variables needed.
 
 ### 3. Activate the Extension
 
@@ -104,11 +96,10 @@ This means Scout always operates on your currently active tab.
 
 ### "Setup required" error
 
-The extension popup shows "Setup required" when `SCOUT_EXTENSION_ID` is not set or the NM host manifest has not been registered. Fix:
+The extension popup shows "Setup required" when the NM host manifest has not been registered. Fix:
 
-1. Confirm `SCOUT_EXTENSION_ID` is set in your `.env` file (see [Installation](#installation) step 2)
-2. Restart the Scout MCP server so it writes the NM host manifest
-3. Reload the extension from `chrome://extensions`
+1. Start (or restart) the Scout MCP server so it writes the NM host manifest
+2. Reload the extension from `chrome://extensions`
 
 ### Native Messaging host not found
 
@@ -136,7 +127,7 @@ Scout extension mode uses a 6-layer security model to protect the WebSocket rela
 | 1. Localhost binding | Remote attackers | Server binds to `127.0.0.1` explicitly — not `0.0.0.0`, not a wildcard |
 | 2. Path enforcement | Probing / scanning | Server rejects WebSocket connections to any path other than `/scout-extension` with 404 |
 | 3. Origin rejection | Malicious websites | WebSocket connections that include an `Origin` header are rejected with 403 (browsers set `Origin` on page-initiated WebSocket connections; extensions do not) |
-| 4. Token auth via Native Messaging | Local malicious apps | A one-time token is written to a permission-restricted file and delivered to the extension through Chrome's Native Messaging (NM) channel. Chrome enforces that only the extension matching `SCOUT_EXTENSION_ID` can invoke the NM host |
+| 4. Token auth via Native Messaging | Local malicious apps | A one-time token is written to a permission-restricted file and delivered to the extension through Chrome's Native Messaging (NM) channel. Chrome enforces that only the extension with the pinned ID can invoke the NM host |
 | 5. Connection limit | Session hijacking | Only 1 concurrent WebSocket connection is accepted. A second connection is refused until the first disconnects |
 | 6. File permissions | Other-user processes | The token file is created with `os.open()` using mode `0o600` on Unix. On Windows, the per-user temp directory ACLs restrict access to the current user |
 
@@ -146,14 +137,10 @@ Native Messaging (NM) is the mechanism Chrome uses to let extensions communicate
 
 **Setup steps:**
 
-1. Open `chrome://extensions` and copy the **ID** of the Scout MCP Bridge extension
-2. Add it to your `.env` file:
-   ```
-   SCOUT_EXTENSION_ID=<your-32-character-extension-id>
-   ```
-3. Start the Scout MCP server — it automatically writes the NM host manifest (`com.scout.mcp.json`) to Chrome's `NativeMessagingHosts/` directory
+1. Load the extension from the `extension/` directory (see [Installation](#installation))
+2. Start the Scout MCP server — it automatically writes the NM host manifest (`com.scout.bridge.json`) to Chrome's `NativeMessagingHosts/` directory using the pinned extension ID
 
-The extension ID is tied to the extension's absolute directory path. If you move the `extension/` folder, Chrome assigns a new ID and you must update `SCOUT_EXTENSION_ID`.
+The extension uses a `key` field in `manifest.json` that pins its ID to `mjialmenlimilhhjgjjjofneeflihccn` on every machine. No manual ID copying is needed. If you build a custom extension with a different key, set `SCOUT_EXTENSION_ID` to override the default.
 
 ### Browser Compatibility
 
@@ -163,7 +150,7 @@ Extension mode supports **Chrome only** in v1. Chromium-based browsers (Brave, E
 
 | Variable | Purpose |
 |----------|---------|
-| `SCOUT_EXTENSION_ID` | **(Required for extension mode)** The 32-character extension ID from `chrome://extensions`. Used to register the NM host manifest and validate the NM channel. |
+| `SCOUT_EXTENSION_ID` | **(Optional)** Override the default extension ID (`mjialmenlimilhhjgjjjofneeflihccn`). Only needed if you build a custom extension with a different `key` in `manifest.json`. |
 | `SCOUT_CHROME_NM_PATH` | **(Optional)** Override the directory where Scout writes the NM host manifest. Use this when running a Chromium-based browser that reads NM manifests from a non-default location. |
 
 **Known `SCOUT_CHROME_NM_PATH` values for Chromium-based browsers:**

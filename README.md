@@ -170,7 +170,7 @@ Scout loads variables from a `.env` file using this search order:
 | `TWILIO_ACCOUNT_SID` | Twilio account SID for 2FA code retrieval |
 | `TWILIO_AUTH_TOKEN` | Twilio auth token |
 | `TWILIO_PHONE_NUMBER` | Twilio phone number receiving 2FA SMS codes |
-| `SCOUT_EXTENSION_ID` | Chrome extension ID for Native Messaging auth (copy from `chrome://extensions`) |
+| `SCOUT_EXTENSION_ID` | Override the default Chrome extension ID for Native Messaging auth (only needed for custom extension builds) |
 | `SCOUT_CHROME_NM_PATH` | Override NM host manifest directory for non-Chrome browsers (Brave, Chromium, Edge) |
 
 ---

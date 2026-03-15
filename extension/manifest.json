@@ -1,7 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Scout MCP Bridge",
-  "version": "1.0.0",
+  "version": "1.2.0",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtNadAZDS1zSI0RTPzw0BY4nJLlB39nS+1t3wGc0k1/fZOW2ln4lIWCUVnLSU0VJYHtx5vhGUsSrw3EgRXyC8iykURRvq99Kd3zxfqiNXyi2fUU91hpwShgy3k3n8mWk7D/Gh+JYY4ZCqOuKpGmt+fdcEXZswhUiXGOwDf0cV/wTgngYjusI3z9xL6v/13WGWMbwCxiJibRLGREJ0MUkkDfaCsLm1Wy9HtTsbPzzPCt+1DWpfbz0BIVBet40S3fJWaNdgnVwDN9Z7covmxAPqkH6bRLy+ekz8VoRUHvWu2LtKCRZXn8qh2t0xiZxkOzv+N0zLdLtKX91jQ+5QRo9SPwIDAQAB",
   "description": "Connects Scout MCP server to your Chrome browser for automation using your existing sessions.",
   "permissions": [
     "debugger",

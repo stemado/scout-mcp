@@ -19,6 +19,12 @@ logger = logging.getLogger(__name__)
 
 NM_HOST_NAME = "com.scout.bridge"
 
+# Deterministic extension ID derived from the public key in extension/manifest.json.
+# Pinning a key in manifest.json makes Chrome assign this same ID on every machine,
+# so users never need to look it up manually.  Override with SCOUT_EXTENSION_ID if
+# you build a custom extension with a different key.
+DEFAULT_EXTENSION_ID = "mjialmenlimilhhjgjjjofneeflihccn"
+
 
 def _scout_data_dir() -> str:
     """Return ~/.scout path."""
@@ -88,13 +94,7 @@ def ensure_native_messaging_host() -> bool:
 
     Returns True if registered, False if skipped.
     """
-    extension_id = os.environ.get("SCOUT_EXTENSION_ID")
-    if not extension_id:
-        logger.warning(
-            "SCOUT_EXTENSION_ID not set — skipping Native Messaging registration. "
-            "Extension auth will not work. See docs/chrome-extension.md for setup."
-        )
-        return False
+    extension_id = os.environ.get("SCOUT_EXTENSION_ID", DEFAULT_EXTENSION_ID)
 
     nm_dir = os.path.join(_scout_data_dir(), "native-messaging")
     os.makedirs(nm_dir, exist_ok=True)
