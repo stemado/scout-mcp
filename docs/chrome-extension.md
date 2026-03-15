@@ -17,13 +17,25 @@ Scout supports two connection modes:
 4. Select the `extension/` directory from the Scout repository
 5. The Scout MCP Bridge icon appears in your toolbar
 
-### 2. Activate the Extension
+### 2. Register the Extension ID
+
+1. Open `chrome://extensions` in Chrome
+2. Copy the **ID** shown under the Scout MCP Bridge card (a 32-character string like `abcdefghijklmnopabcdefghijklmnop`)
+3. Add the extension ID to your `.env` file:
+   ```
+   SCOUT_EXTENSION_ID=<your-extension-id>
+   ```
+4. Start (or restart) the Scout MCP server — it auto-registers the Native Messaging host manifest for Chrome
+
+> **Note:** The extension ID is tied to the extension's absolute directory path. If you move the `extension/` folder, Chrome assigns a new ID and you must update `SCOUT_EXTENSION_ID` accordingly.
+
+### 3. Activate the Extension
 
 1. Click the **Scout MCP Bridge** icon in the Chrome toolbar
 2. Toggle the switch to **Active**
 3. The status will show "Waiting for Scout..." until you launch a session
 
-### 3. Launch in Extension Mode
+### 4. Launch in Extension Mode
 
 ```python
 # From any MCP client (Claude Desktop, Cursor, etc.)
@@ -90,9 +102,80 @@ When you switch tabs in Chrome, the extension automatically:
 
 This means Scout always operates on your currently active tab.
 
-## Security Notes
+### "Setup required" error
 
-### What Scout CAN access through the extension
+The extension popup shows "Setup required" when `SCOUT_EXTENSION_ID` is not set or the NM host manifest has not been registered. Fix:
+
+1. Confirm `SCOUT_EXTENSION_ID` is set in your `.env` file (see [Installation](#installation) step 2)
+2. Restart the Scout MCP server so it writes the NM host manifest
+3. Reload the extension from `chrome://extensions`
+
+### Native Messaging host not found
+
+Chrome logs `Native host has exited` or the extension cannot open the NM channel. Common causes:
+
+- The NM host manifest (`com.scout.mcp.json`) is missing from Chrome's `NativeMessagingHosts/` directory. Restarting Scout should recreate it.
+- You are using a Chromium-based browser (Brave, Edge) that reads NM manifests from a different path. Set `SCOUT_CHROME_NM_PATH` to the correct directory (see [Environment Variables](#environment-variables) below).
+- On macOS/Linux, the manifest file or the Scout executable it points to has incorrect permissions.
+
+### Token mismatch
+
+The extension connects but is immediately disconnected with an authentication error. This happens when the token the extension received via NM does not match the token the server expects. Causes:
+
+- Scout was restarted (which generates a new token) but the extension has a stale token. Toggle the extension off and on again, or reload it from `chrome://extensions`.
+- Multiple Scout instances are running and wrote different token files. Stop all instances and start a single one.
+
+## Security
+
+Scout extension mode uses a 6-layer security model to protect the WebSocket relay between the MCP server and Chrome.
+
+### Security Model
+
+| Layer | Threat Blocked | Mechanism |
+|-------|---------------|-----------|
+| 1. Localhost binding | Remote attackers | Server binds to `127.0.0.1` explicitly — not `0.0.0.0`, not a wildcard |
+| 2. Path enforcement | Probing / scanning | Server rejects WebSocket connections to any path other than `/scout-extension` with 404 |
+| 3. Origin rejection | Malicious websites | WebSocket connections that include an `Origin` header are rejected with 403 (browsers set `Origin` on page-initiated WebSocket connections; extensions do not) |
+| 4. Token auth via Native Messaging | Local malicious apps | A one-time token is written to a permission-restricted file and delivered to the extension through Chrome's Native Messaging (NM) channel. Chrome enforces that only the extension matching `SCOUT_EXTENSION_ID` can invoke the NM host |
+| 5. Connection limit | Session hijacking | Only 1 concurrent WebSocket connection is accepted. A second connection is refused until the first disconnects |
+| 6. File permissions | Other-user processes | The token file is created with `os.open()` using mode `0o600` on Unix. On Windows, the per-user temp directory ACLs restrict access to the current user |
+
+### Native Messaging Setup
+
+Native Messaging (NM) is the mechanism Chrome uses to let extensions communicate with local executables. Scout uses it to deliver the authentication token securely — Chrome guarantees that only the extension with the registered ID can open the NM channel.
+
+**Setup steps:**
+
+1. Open `chrome://extensions` and copy the **ID** of the Scout MCP Bridge extension
+2. Add it to your `.env` file:
+   ```
+   SCOUT_EXTENSION_ID=<your-32-character-extension-id>
+   ```
+3. Start the Scout MCP server — it automatically writes the NM host manifest (`com.scout.mcp.json`) to Chrome's `NativeMessagingHosts/` directory
+
+The extension ID is tied to the extension's absolute directory path. If you move the `extension/` folder, Chrome assigns a new ID and you must update `SCOUT_EXTENSION_ID`.
+
+### Browser Compatibility
+
+Extension mode supports **Chrome only** in v1. Chromium-based browsers (Brave, Edge, Chromium) can work with the `SCOUT_CHROME_NM_PATH` override described below, but are not officially tested.
+
+### Environment Variables
+
+| Variable | Purpose |
+|----------|---------|
+| `SCOUT_EXTENSION_ID` | **(Required for extension mode)** The 32-character extension ID from `chrome://extensions`. Used to register the NM host manifest and validate the NM channel. |
+| `SCOUT_CHROME_NM_PATH` | **(Optional)** Override the directory where Scout writes the NM host manifest. Use this when running a Chromium-based browser that reads NM manifests from a non-default location. |
+
+**Known `SCOUT_CHROME_NM_PATH` values for Chromium-based browsers:**
+
+| Browser | OS | Path |
+|---------|----|------|
+| Brave | Linux | `~/.config/BraveSoftware/Brave-Browser/NativeMessagingHosts/` |
+| Brave | macOS | `~/Library/Application Support/BraveSoftware/Brave-Browser/NativeMessagingHosts/` |
+| Chromium | Linux | `~/.config/chromium/NativeMessagingHosts/` |
+| Edge | Linux | `~/.config/microsoft-edge/NativeMessagingHosts/` |
+
+### What Scout CAN Access Through the Extension
 
 - DOM content of the active tab (same as DevTools)
 - Network requests/responses for the active tab
@@ -100,21 +183,25 @@ This means Scout always operates on your currently active tab.
 - Screenshots of the active tab
 - Cookies and storage visible to the page
 
-### What Scout CANNOT access
+### What Scout CANNOT Access
 
 - Other tabs (only the active tab is debugged)
-- Chrome's internal pages (chrome://, chrome-extension://)
+- Chrome's internal pages (`chrome://`, `chrome-extension://`)
 - Browser-level settings or bookmarks
 - File system (beyond download directory)
 - Other extensions' data
 
-### Infobar notice
+### Infobar Notice
 
 When the debugger attaches, Chrome shows an infobar: *"Scout MCP Bridge started debugging this browser"*. This is a Chrome security feature — it is visible to you (the user) but is **not detectable by websites**. The infobar disappears when the debugger detaches.
 
-### Automation detection
+### Automation Detection
 
 Extension mode does NOT set any automation flags (`navigator.webdriver`, automation headers, etc.). Your browser fingerprint remains identical to normal browsing. The `chrome.debugger` API uses the same CDP protocol as DevTools — websites cannot distinguish debugger usage from normal browsing.
+
+### Residual Risk
+
+No localhost WebSocket design is immune to every local-machine attack. A process running as the same OS user with the ability to read the token file (layer 6) and connect before the legitimate extension (layer 5) could, in theory, impersonate the extension. The NM channel (layer 4) raises the bar significantly — an attacker would need to register their own NM host or read the token file within the narrow window between server start and extension connection. For most threat models, the combination of all six layers provides defense-in-depth that is appropriate for a development-time tool running on a developer workstation.
 
 ## Architecture
 
