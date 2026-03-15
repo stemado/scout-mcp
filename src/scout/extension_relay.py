@@ -117,6 +117,10 @@ class ExtensionRelay:
 
         self._loop = asyncio.get_running_loop()
 
+        # Register NM host for Chrome extension auth
+        from .native_messaging import ensure_native_messaging_host
+        ensure_native_messaging_host()
+
         self._server = await websockets.asyncio.server.serve(
             self._handle_connection,
             self._host,

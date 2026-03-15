@@ -569,3 +569,20 @@ class TestPathEnforcement:
         result = await relay._check_request(None, mock_request)
         assert result is not None
         assert result.status_code == 403
+
+
+# --- Task 5: NM Registration Wiring ---
+
+
+class TestNMRegistrationWiring:
+    """ensure_native_messaging_host is called during relay start()."""
+
+    @pytest.mark.asyncio
+    async def test_start_calls_nm_registration(self):
+        with patch("scout.native_messaging.ensure_native_messaging_host") as mock_nm:
+            relay = ExtensionRelay()
+            try:
+                await relay.start()
+            except Exception:
+                pass  # May fail due to port binding, that's fine
+            mock_nm.assert_called_once()
