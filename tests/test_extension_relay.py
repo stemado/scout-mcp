@@ -524,3 +524,48 @@ class TestServerBindAddress:
     def test_default_host_is_ipv4_loopback(self):
         from scout.extension_relay import DEFAULT_HOST
         assert DEFAULT_HOST == "127.0.0.1"
+
+
+# --- Task 3: Path Enforcement + auth_ok + TOCTOU ---
+
+
+class TestPathEnforcement:
+    """Server must reject connections to wrong paths."""
+
+    @pytest.mark.asyncio
+    async def test_rejects_wrong_path(self):
+        """_check_request should return 404 for non-matching paths."""
+        relay = ExtensionRelay()
+        mock_request = MagicMock()
+        mock_request.path = "/wrong-path"
+        mock_request.headers = MagicMock()
+        mock_request.headers.raw_items.return_value = []
+
+        result = await relay._check_request(None, mock_request)
+        assert result is not None
+        assert result.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_accepts_correct_path(self):
+        """_check_request should return None for correct path with no Origin."""
+        relay = ExtensionRelay()
+        mock_request = MagicMock()
+        mock_request.path = "/scout-extension"
+        mock_request.headers = MagicMock()
+        mock_request.headers.raw_items.return_value = []
+
+        result = await relay._check_request(None, mock_request)
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_rejects_origin_on_correct_path(self):
+        """Even on correct path, Origin header should be rejected."""
+        relay = ExtensionRelay()
+        mock_request = MagicMock()
+        mock_request.path = "/scout-extension"
+        mock_request.headers = MagicMock()
+        mock_request.headers.raw_items.return_value = [("origin", "https://evil.com")]
+
+        result = await relay._check_request(None, mock_request)
+        assert result is not None
+        assert result.status_code == 403

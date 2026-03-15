@@ -121,7 +121,7 @@ class ExtensionRelay:
             self._handle_connection,
             self._host,
             self._port,
-            process_request=self._check_origin,
+            process_request=self._check_request,
         )
         logger.info("Extension relay server listening on ws://%s:%d%s",
                      self._host, self._port, DEFAULT_PATH)
@@ -139,12 +139,21 @@ class ExtensionRelay:
         except Exception as e:
             logger.warning("Failed to write token file: %s", e)
 
-    async def _check_origin(self, connection, request):
-        """Validate Origin header on WebSocket upgrade requests.
+    async def _check_request(self, connection, request):
+        """Validate path and Origin header on WebSocket upgrade requests.
 
-        Browser extensions send no Origin header. A web page attempting
-        to connect would send one — reject those connections.
+        Path enforcement: only /scout-extension is accepted.
+        Origin check: browser extensions send no Origin header. A web page
+        attempting to connect would send one — reject those connections.
         """
+        from websockets.http11 import Response
+        from websockets.datastructures import Headers
+
+        # Path enforcement
+        if request.path != DEFAULT_PATH:
+            return Response(404, "Not Found", Headers())
+
+        # Origin check
         origin = None
         for header_name, header_value in request.headers.raw_items():
             if header_name.lower() == "origin":
@@ -161,8 +170,7 @@ class ExtensionRelay:
             if self._security_counter:
                 self._security_counter.increment("ws_rejected")
             logger.warning("Rejected WebSocket connection with Origin: %s", origin)
-            from websockets.http11 import Response
-            return Response(403, "Forbidden", websockets.datastructures.Headers())
+            return Response(403, "Forbidden", Headers())
 
     async def _handle_connection(self, websocket) -> None:
         """Handle a WebSocket connection from the Chrome extension."""
@@ -182,6 +190,9 @@ class ExtensionRelay:
                 logger.warning("Rejected additional WebSocket connection (limit: 1)")
                 await websocket.close(1008, "Connection limit reached: only one extension connection allowed")
                 return
+            self._active_connections += 1  # Reserve the slot before auth
+
+        auth_succeeded = False
 
         # --- Security: token authentication ---
         try:
@@ -198,6 +209,8 @@ class ExtensionRelay:
                     self._security_counter.increment("ws_rejected")
                 logger.warning("Rejected WebSocket connection: invalid auth token")
                 await websocket.close(1008, "Invalid authentication token")
+                with self._connection_lock:
+                    self._active_connections -= 1
                 return
         except (asyncio.TimeoutError, json.JSONDecodeError, Exception) as e:
             log_security_event(
@@ -210,12 +223,14 @@ class ExtensionRelay:
                 self._security_counter.increment("ws_rejected")
             logger.warning("Rejected WebSocket connection: auth failed (%s)", e)
             await websocket.close(1008, "Authentication required within 2 seconds")
+            with self._connection_lock:
+                self._active_connections -= 1
             return
 
+        # Send auth confirmation
+        auth_succeeded = True
+        await websocket.send(json.dumps({"type": "auth_ok"}))
         logger.info("Extension authenticated successfully from %s", websocket.remote_address)
-
-        with self._connection_lock:
-            self._active_connections += 1
 
         self._ws = websocket
         self._connected.set()
@@ -260,8 +275,9 @@ class ExtensionRelay:
         finally:
             self._ws = None
             self._connected.clear()
-            with self._connection_lock:
-                self._active_connections = max(0, self._active_connections - 1)
+            if auth_succeeded:
+                with self._connection_lock:
+                    self._active_connections = max(0, self._active_connections - 1)
             # Wake up any pending requests with an error
             with self._lock:
                 for req_id, event in self._pending.items():
