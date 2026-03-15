@@ -31,6 +31,31 @@ Most browser-automation tools for AI take full-page screenshots and have the mod
 
 Scout uses [Botasaurus](https://github.com/omkarcloud/botasaurus) under the hood, which handles browser fingerprinting and detection evasion automatically. Sites that block Selenium and Playwright see a normal browser session.
 
+## Chrome Extension Mode
+
+By default, Scout launches its own browser. **Extension mode** connects to your existing Chrome instead — preserving your logged-in sessions, cookies, and browser state.
+
+```python
+launch_session(connection_mode="extension")
+```
+
+**Quick setup:**
+
+1. Open `chrome://extensions`, enable Developer mode, click "Load unpacked", select the `extension/` directory from the Scout repo
+2. Click the **Scout MCP Bridge** toolbar icon and toggle it **Active**
+3. Call `launch_session(connection_mode="extension")` from your AI client
+
+| Scenario | Recommended Mode |
+|----------|-----------------|
+| Sites where you're already logged in | `extension` |
+| Anti-detection scraping or CI/CD | `launch` (default) |
+| Sites requiring 2FA/SSO you've already passed | `extension` |
+| Parallel sessions or headless automation | `launch` (default) |
+
+Extension mode sets no automation flags — your browser fingerprint stays identical to normal browsing. All 17 Scout tools work the same in both modes.
+
+Full setup guide and troubleshooting: [docs/chrome-extension.md](docs/chrome-extension.md)
+
 ---
 
 ## Comparison
@@ -75,7 +100,7 @@ uvx scout-mcp-server
 ### Via npm
 
 ```bash
-npx -y scout-mcp-server
+npx -y @stemado/scout-mcp
 ```
 
 ---
@@ -87,7 +112,7 @@ You configure Scout once. After that, your AI client starts and stops the server
 ### Claude Code
 
 ```bash
-claude mcp add scout -- npx -y scout-mcp-server
+claude mcp add scout -- npx -y @stemado/scout-mcp
 ```
 
 Restart Claude Code. Scout's 17 tools are now available in every session.
@@ -101,11 +126,14 @@ Add to your `claude_desktop_config.json`:
   "mcpServers": {
     "scout": {
       "command": "npx",
-      "args": ["-y", "scout-mcp-server"]
+      "args": ["-y", "@stemado/scout-mcp"],
+      "cwd": "C:\\Users\\YourUsername"
     }
   }
 }
 ```
+
+> **Important:** The `cwd` field sets the working directory for the Scout server. Without it, Claude Desktop may launch Scout from a system directory (e.g. `C:\Windows\System32` on Windows), causing downloads and file operations to fail with permission errors. Set it to your home directory or any folder where Scout should have write access.
 
 ### Cursor
 
@@ -116,7 +144,7 @@ In Cursor Settings > MCP Servers, add:
   "mcpServers": {
     "scout": {
       "command": "npx",
-      "args": ["-y", "scout-mcp-server"]
+      "args": ["-y", "@stemado/scout-mcp"]
     }
   }
 }
@@ -142,6 +170,8 @@ Scout loads variables from a `.env` file using this search order:
 | `TWILIO_ACCOUNT_SID` | Twilio account SID for 2FA code retrieval |
 | `TWILIO_AUTH_TOKEN` | Twilio auth token |
 | `TWILIO_PHONE_NUMBER` | Twilio phone number receiving 2FA SMS codes |
+| `SCOUT_EXTENSION_ID` | Chrome extension ID for Native Messaging auth (copy from `chrome://extensions`) |
+| `SCOUT_CHROME_NM_PATH` | Override NM host manifest directory for non-Chrome browsers (Brave, Chromium, Edge) |
 
 ---
 
@@ -167,7 +197,8 @@ Localhost navigation is blocked by default. Set `SCOUT_ALLOW_LOCALHOST=1` to ena
 
 | Tool | Description |
 |------|-------------|
-| `launch_session` | Open a browser (headed or headless, optional proxy) |
+| `launch_session` | Open a browser (headed or headless, optional proxy) or connect to an existing Chrome via extension mode |
+| `check_extension` | Check Chrome extension connection status |
 | `scout_page_tool` | Structural page overview: iframes, shadow DOM, element counts |
 | `find_elements` | Search for elements by text, type, or CSS selector |
 | `execute_action_tool` | Click, type, select, navigate, scroll, hover, wait |
