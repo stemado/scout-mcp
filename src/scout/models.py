@@ -2,9 +2,17 @@
 
 from __future__ import annotations
 
+from enum import Enum
 from typing import Any
 
 from pydantic import BaseModel, Field
+
+
+class ConnectionMode(str, Enum):
+    """How Scout connects to Chrome."""
+
+    LAUNCH = "launch"
+    EXTENSION = "extension"
 
 
 class IframeInfo(BaseModel):
@@ -151,6 +159,7 @@ class SessionInfo(BaseModel):
     browser_info: dict = Field(default_factory=dict)
     current_url: str = Field(default="about:blank")
     status: str = Field(default="active")
+    connection_mode: str = Field(default="launch", description="'launch' or 'extension'")
 
 
 class ScoutSummaryRecord(BaseModel):
@@ -278,6 +287,7 @@ class SessionHistory(BaseModel):
 
     session_id: str
     started_at: str
+    connection_mode: str = Field(default="launch", description="'launch' or 'extension'")
     actions: list[ActionRecord] = Field(default_factory=list)
     scouts: list[ScoutSummaryRecord] = Field(default_factory=list)
     find_elements_calls: list[FindElementsRecord] = Field(default_factory=list)
@@ -295,6 +305,17 @@ class SessionCloseResult(BaseModel):
     session_duration_seconds: float = 0
     total_actions_performed: int = 0
     total_scouts_performed: int = 0
+
+
+class ExtensionStatus(BaseModel):
+    """Status of the Chrome extension connection."""
+
+    status: str = Field(description="'connected', 'waiting', or 'not_running'")
+    message: str = Field(description="Human-readable status message")
+    install_instructions: str | None = Field(
+        default=None,
+        description="Installation instructions (present when not_running)",
+    )
 
 
 class FillSecretResult(BaseModel):

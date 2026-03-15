@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 280px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      padding: 16px;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .header img {
+      width: 28px;
+      height: 28px;
+    }
+    .header h1 {
+      font-size: 15px;
+      font-weight: 600;
+      color: #ffffff;
+    }
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .toggle-label {
+      font-size: 13px;
+      color: #b0b0b0;
+    }
+    .toggle {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      cursor: pointer;
+    }
+    .toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .slider {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: #333;
+      border-radius: 12px;
+      transition: background 0.2s;
+    }
+    .slider::before {
+      content: '';
+      position: absolute;
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background: #888;
+      border-radius: 50%;
+      transition: transform 0.2s, background 0.2s;
+    }
+    .toggle input:checked + .slider {
+      background: #16213e;
+    }
+    .toggle input:checked + .slider::before {
+      transform: translateX(20px);
+      background: #4ecca3;
+    }
+    .status-line {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      background: #16213e;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      font-size: 12px;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .status-dot.connected { background: #4ecca3; }
+    .status-dot.waiting { background: #f0a500; animation: pulse 1.5s infinite; }
+    .status-dot.inactive { background: #666; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    .tab-url {
+      font-size: 11px;
+      color: #888;
+      padding: 6px 12px;
+      background: #0f0f23;
+      border-radius: 6px;
+      word-break: break-all;
+      max-height: 40px;
+      overflow: hidden;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <img src="icons/icon48.png" alt="Scout">
+    <h1>Scout MCP Bridge</h1>
+  </div>
+
+  <div class="toggle-row">
+    <span class="toggle-label" id="toggle-text">Inactive</span>
+    <label class="toggle">
+      <input type="checkbox" id="active-toggle">
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <div class="status-line">
+    <span class="status-dot inactive" id="status-dot"></span>
+    <span id="status-text">Inactive</span>
+  </div>
+
+  <div class="tab-url" id="tab-url" style="display: none;"></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

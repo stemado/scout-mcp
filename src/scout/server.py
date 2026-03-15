@@ -22,7 +22,9 @@ from mcp.types import CallToolResult, ImageContent, TextContent
 from .actions import execute_action, inspect_element, run_javascript, take_screenshot
 from .models import (
     ActionRecord,
+    ConnectionMode,
     DownloadEvent,
+    ExtensionStatus,
     FillSecretResult,
     MonitorResult,
     ProcessResult,
@@ -61,6 +63,7 @@ class AppContext:
     max_sessions: int = 1
     _launch_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     _env_vars: dict[str, str] | None = field(default=None)
+    _extension_relay: object | None = field(default=None)  # ExtensionRelay when active
 
 
 @asynccontextmanager
@@ -87,6 +90,13 @@ async def app_lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
                 await asyncio.to_thread(session.close)
             except Exception:
                 pass
+        # Clean up extension relay server
+        if ctx._extension_relay is not None:
+            try:
+                await ctx._extension_relay.stop()
+            except Exception:
+                pass
+            ctx._extension_relay = None
 
 
 # --- MCP Server Instance ---
@@ -130,6 +140,7 @@ async def launch_session(
     headless: bool = False,
     proxy: str | None = None,
     download_dir: str = "./downloads",
+    connection_mode: str = "launch",
     ctx: Context[ServerSession, AppContext] = None,
 ) -> dict:
     """Launch a new browser session via Botasaurus with anti-detection enabled.
@@ -146,8 +157,17 @@ async def launch_session(
                'npm install' at import time without a lockfile. Only use proxy in
                trusted environments where Node.js is installed.
         download_dir: Directory for downloaded files. Default: './downloads'.
+        connection_mode: How to connect to Chrome. 'launch' (default) starts a new
+                         browser instance. 'extension' connects to your existing
+                         Chrome via the Scout extension, preserving logged-in sessions.
     """
     app_ctx = _get_ctx(ctx)
+
+    # Validate connection_mode
+    try:
+        mode = ConnectionMode(connection_mode)
+    except ValueError:
+        return {"error": f"Invalid connection_mode: '{connection_mode}'. Use 'launch' or 'extension'."}
 
     async with app_ctx._launch_lock:
         if len(app_ctx.sessions) >= app_ctx.max_sessions:
@@ -162,15 +182,75 @@ async def launch_session(
             headless=headless,
             proxy=proxy,
             download_dir=download_dir,
+            connection_mode=mode,
         )
 
-        await ctx.info(f"Launching browser session {session.session_id}...")
+        if mode == ConnectionMode.EXTENSION:
+            from .extension_relay import ExtensionRelay
+
+            # Start the WebSocket relay server if not already running
+            if app_ctx._extension_relay is None:
+                relay = ExtensionRelay()
+                await relay.start()
+                app_ctx._extension_relay = relay
+            else:
+                relay = app_ctx._extension_relay
+
+            session.set_extension_relay(relay)
+            await ctx.info(
+                f"Waiting for Scout extension to connect on ws://localhost:9222/scout-extension..."
+            )
+        else:
+            await ctx.info(f"Launching browser session {session.session_id}...")
+
         info: SessionInfo = await asyncio.to_thread(session.launch, url)
         app_ctx.sessions[session.session_id] = session
 
     await ctx.info(f"Session {session.session_id} active at {info.current_url}")
 
     return info.model_dump(exclude_none=True)
+
+
+# --- Tool: check_extension ---
+
+
+@mcp.tool()
+async def check_extension(
+    ctx: Context[ServerSession, AppContext] = None,
+) -> dict:
+    """Check the status of the Scout Chrome extension connection.
+
+    Returns the extension connection status: whether the relay server is running,
+    whether the extension is connected, and installation instructions if needed.
+    """
+    app_ctx = _get_ctx(ctx)
+    relay = app_ctx._extension_relay
+
+    if relay is None:
+        return ExtensionStatus(
+            status="not_running",
+            message="Extension relay server is not running. "
+                    "Use launch_session with connection_mode='extension' to start it.",
+            install_instructions=(
+                "1. Open chrome://extensions in Chrome\n"
+                "2. Enable 'Developer mode' (top right toggle)\n"
+                "3. Click 'Load unpacked' and select the extension/ directory from the Scout repo\n"
+                "4. Click the Scout MCP Bridge icon in the toolbar and toggle Active\n"
+                "5. Use launch_session(connection_mode='extension') to connect"
+            ),
+        ).model_dump(exclude_none=True)
+
+    if relay.is_connected:
+        return ExtensionStatus(
+            status="connected",
+            message=f"Extension connected. Tab URL: {relay.tab_url}",
+        ).model_dump(exclude_none=True)
+
+    return ExtensionStatus(
+        status="waiting",
+        message="Relay server running but extension not connected. "
+                "Open Chrome and activate the Scout MCP Bridge extension.",
+    ).model_dump(exclude_none=True)
 
 
 # --- Tool: scout_page ---

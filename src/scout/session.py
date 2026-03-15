@@ -5,19 +5,23 @@ from __future__ import annotations
 import os
 import uuid
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 
 from botasaurus_driver import Driver
 
 from .download_manager import DownloadManager
 from .history import SessionHistoryTracker
-from .models import InteractiveElement, SessionCloseResult, SessionInfo
+from .models import ConnectionMode, InteractiveElement, SessionCloseResult, SessionInfo
 from .network import NetworkMonitor
 from .screencast import ScreencastMonitor
 from .validation import validate_directory_path, validate_url
 
+if TYPE_CHECKING:
+    from .extension_relay import ExtensionRelay
+
 
 class BrowserSession:
-    """Manages a single browser session via botasaurus-driver.
+    """Manages a single browser session via botasaurus-driver or extension relay.
 
     All methods are synchronous (botasaurus-driver is sync).
     The server.py layer wraps calls in asyncio.to_thread().
@@ -30,6 +34,7 @@ class BrowserSession:
         download_dir: str = "./downloads",
         user_agent: str | None = None,
         window_size: tuple[int, int] | None = None,
+        connection_mode: ConnectionMode = ConnectionMode.LAUNCH,
     ) -> None:
         self.session_id = uuid.uuid4().hex[:12]
         self.created_at = datetime.now(timezone.utc)
@@ -39,9 +44,11 @@ class BrowserSession:
         self._proxy = proxy
         self._user_agent = user_agent
         self._window_size = window_size
+        self.connection_mode = connection_mode
 
         self.driver: Driver | None = None
-        self.history = SessionHistoryTracker(self.session_id)
+        self._extension_relay: ExtensionRelay | None = None
+        self.history = SessionHistoryTracker(self.session_id, connection_mode.value)
         self.download_manager = DownloadManager(self.download_dir, self.session_id)
         self.network_monitor = NetworkMonitor(self.download_dir)
         self.screencast_monitor = ScreencastMonitor(self.download_dir)
@@ -54,6 +61,12 @@ class BrowserSession:
 
     def launch(self, url: str | None = None) -> SessionInfo:
         """Launch the browser and optionally navigate to an initial URL."""
+        if self.connection_mode == ConnectionMode.EXTENSION:
+            return self._launch_extension(url)
+        return self._launch_browser(url)
+
+    def _launch_browser(self, url: str | None = None) -> SessionInfo:
+        """Launch a new browser instance (original behavior)."""
         os.makedirs(self.download_dir, exist_ok=True)
 
         driver_kwargs: dict = {
@@ -100,7 +113,70 @@ class BrowserSession:
             browser_info=browser_info,
             current_url=current_url,
             status="active",
+            connection_mode=self.connection_mode.value,
         )
+
+    def _launch_extension(self, url: str | None = None) -> SessionInfo:
+        """Connect to Chrome via the extension WebSocket relay."""
+        from .extension_relay import ExtensionDriver, ExtensionRelay, CONNECT_TIMEOUT
+
+        if self._extension_relay is None:
+            raise RuntimeError(
+                "Extension relay not initialized. "
+                "Call set_extension_relay() before launching in extension mode."
+            )
+
+        relay = self._extension_relay
+
+        # Wait for the extension to connect
+        if not relay.wait_for_extension(timeout=CONNECT_TIMEOUT):
+            raise RuntimeError(
+                "Scout extension not detected. Install the extension and set it "
+                "to Active before launching in extension mode."
+            )
+
+        # Create the adapter driver
+        self.driver = ExtensionDriver(relay)
+
+        os.makedirs(self.download_dir, exist_ok=True)
+
+        # Try to initialize download management (may fail if Browser domain
+        # isn't fully supported through the extension, which is acceptable)
+        try:
+            self.download_manager.start(self.driver)
+        except Exception:
+            pass
+
+        current_url = relay.tab_url or "about:blank"
+        if url:
+            validate_url(url, allow_localhost=os.environ.get("SCOUT_ALLOW_LOCALHOST", "").lower() in ("1", "true", "yes"))
+            self.driver.get(url)
+            current_url = self.driver.current_url
+            self.history.record_navigation(current_url)
+
+        # Extract browser info
+        browser_info = {}
+        try:
+            info = self.driver._browser.info
+            browser_info = {
+                "user_agent": info.get("User-Agent", ""),
+                "browser_version": info.get("Browser", ""),
+                "protocol_version": info.get("Protocol-Version", ""),
+            }
+        except Exception:
+            pass
+
+        return SessionInfo(
+            session_id=self.session_id,
+            browser_info=browser_info,
+            current_url=current_url,
+            status="active",
+            connection_mode=self.connection_mode.value,
+        )
+
+    def set_extension_relay(self, relay: ExtensionRelay) -> None:
+        """Set the extension relay for extension connection mode."""
+        self._extension_relay = relay
 
     def close(self) -> SessionCloseResult:
         """Close the browser and release all resources."""
