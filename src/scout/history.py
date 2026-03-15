@@ -31,9 +31,10 @@ MAX_RECORDINGS = 100
 class SessionHistoryTracker:
     """Tracks all actions, scout reports, network events, and navigations for a session."""
 
-    def __init__(self, session_id: str) -> None:
+    def __init__(self, session_id: str, connection_mode: str = "launch") -> None:
         self.session_id = session_id
         self.started_at = datetime.now(timezone.utc).isoformat()
+        self.connection_mode = connection_mode
         self.actions: list[ActionRecord] = []
         self.scouts: list[ScoutSummaryRecord] = []
         self.find_elements_calls: list[FindElementsRecord] = []
@@ -109,6 +110,7 @@ class SessionHistoryTracker:
         return SessionHistory(
             session_id=self.session_id,
             started_at=self.started_at,
+            connection_mode=self.connection_mode,
             actions=self.actions,
             scouts=self.scouts,
             find_elements_calls=self.find_elements_calls,
