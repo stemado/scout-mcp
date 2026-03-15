@@ -37,6 +37,13 @@ from .models import (
 )
 from .sanitize import sanitize_response
 from .scout import build_element_summary, filter_elements, scout_page
+from .security import (
+    log_security_event,
+    read_security_log,
+    scan_and_warn,
+    scrub_network_events,
+)
+from .security.navigation_guard import extract_registered_domain
 from .session import BrowserSession
 from .otp import poll_for_otp
 
@@ -141,6 +148,7 @@ async def launch_session(
     proxy: str | None = None,
     download_dir: str = "./downloads",
     connection_mode: str = "launch",
+    allowed_domains: list[str] | None = None,
     ctx: Context[ServerSession, AppContext] = None,
 ) -> dict:
     """Launch a new browser session via Botasaurus with anti-detection enabled.
@@ -160,6 +168,10 @@ async def launch_session(
         connection_mode: How to connect to Chrome. 'launch' (default) starts a new
                          browser instance. 'extension' connects to your existing
                          Chrome via the Scout extension, preserving logged-in sessions.
+        allowed_domains: Optional list of domains allowed for fill_secret credential
+                         typing and cross-origin navigation (extension mode).
+                         Example: ['example.com', 'login.example.com'].
+                         If omitted, fill_secret works on any domain (with a warning).
     """
     app_ctx = _get_ctx(ctx)
 
@@ -183,6 +195,7 @@ async def launch_session(
             proxy=proxy,
             download_dir=download_dir,
             connection_mode=mode,
+            allowed_domains=allowed_domains,
         )
 
         if mode == ConnectionMode.EXTENSION:
@@ -197,6 +210,18 @@ async def launch_session(
                 relay = app_ctx._extension_relay
 
             session.set_extension_relay(relay)
+            relay._security_counter = session.security_counter
+
+            # Initialize navigation guard for extension mode
+            if url:
+                from .security.navigation_guard import NavigationGuard
+                session._navigation_guard = NavigationGuard(
+                    origin_url=url,
+                    allowed_domains=allowed_domains,
+                    session_id=session.session_id,
+                    security_counter=session.security_counter,
+                )
+
             await ctx.info(
                 f"Waiting for Scout extension to connect on ws://localhost:9222/scout-extension..."
             )
@@ -291,18 +316,24 @@ async def scout_page_tool(
 
     await ctx.info(f"Scout complete: {report.page_summary}")
 
+    page_url = report.page_metadata.url
+
     if detail_level == "full":
-        return sanitize_response(report.model_dump(exclude_none=True), secrets=session._secret_values)
+        data = report.model_dump(exclude_none=True)
+        response = sanitize_response(data, secrets=session._secret_values)
+        return scan_and_warn(response, data, page_url, session.session_id, session.security_counter)
 
     # Summary mode: return structure + counts, no element list
     element_summary = build_element_summary(report.interactive_elements)
-    return sanitize_response({
+    data = {
         "page_metadata": report.page_metadata.model_dump(exclude_none=True),
         "iframe_map": [f.model_dump(exclude_none=True) for f in report.iframe_map],
         "shadow_dom_boundaries": [s.model_dump(exclude_none=True) for s in report.shadow_dom_boundaries],
         "element_summary": element_summary.model_dump(exclude_none=True),
         "page_summary": report.page_summary,
-    }, secrets=session._secret_values)
+    }
+    response = sanitize_response(data, secrets=session._secret_values)
+    return scan_and_warn(response, data, page_url, session.session_id, session.security_counter)
 
 
 # --- Tool: find_elements ---
@@ -384,11 +415,18 @@ async def find_elements(
 
     await ctx.info(f"Found {len(matched)} element(s) matching query")
 
-    return sanitize_response({
+    data = {
         "matched": len(matched),
         "total_on_page": len(elements),
         "elements": stripped,
-    }, secrets=session._secret_values)
+    }
+    page_url = ""
+    try:
+        page_url = await asyncio.to_thread(lambda: session.driver.current_url)
+    except Exception:
+        pass
+    response = sanitize_response(data, secrets=session._secret_values)
+    return scan_and_warn(response, data, page_url, session.session_id, session.security_counter)
 
 
 # --- Tool: execute_action ---
@@ -486,6 +524,44 @@ async def fill_secret(
     start = time.perf_counter()
     timestamp = datetime.now(timezone.utc).isoformat()
 
+    # --- Security: domain scoping ---
+    domain_warning: str | None = None
+    try:
+        current_url = await asyncio.to_thread(lambda: session.driver.current_url)
+    except Exception:
+        current_url = ""
+
+    if session._allowed_domains is not None:
+        current_domain = extract_registered_domain(current_url)
+        allowed_set = {d.lower() for d in session._allowed_domains}
+        if current_domain.lower() not in allowed_set:
+            error_msg = (
+                f"fill_secret refused: current domain '{current_domain}' is not in the "
+                f"session's allowed_domains list. Allowed: {session._allowed_domains}. "
+                f"Use launch_session with allowed_domains to authorize additional domains."
+            )
+            log_security_event(
+                session_id=session.session_id,
+                event_type="credential_refused",
+                severity="critical",
+                url=current_url,
+                detail={
+                    "env_var": env_var,
+                    "current_domain": current_domain,
+                    "allowed_domains": session._allowed_domains,
+                },
+            )
+            session.security_counter.increment("credential_refused")
+            return FillSecretResult(
+                success=False, env_var=env_var, selector=selector,
+                error=error_msg,
+            ).model_dump(exclude_none=True)
+    else:
+        domain_warning = (
+            "[SECURITY] No domain scope set for this session. Consider using "
+            "allowed_domains in launch_session to restrict credential usage."
+        )
+
     # Load the secret value server-side from .env
     scrub_warning: str | None = None
     try:
@@ -549,6 +625,11 @@ async def fill_secret(
         session.history.record_navigation(url_after)
     session.invalidate_element_cache()
 
+    # Combine warnings
+    combined_warning = scrub_warning
+    if domain_warning:
+        combined_warning = f"{domain_warning}\n{scrub_warning}" if scrub_warning else domain_warning
+
     result = FillSecretResult(
         success=error is None,
         env_var=env_var,
@@ -557,7 +638,7 @@ async def fill_secret(
         url_changed=url_before != url_after,
         current_url=url_after,
         error=error,
-        warning=scrub_warning,
+        warning=combined_warning,
         elapsed_ms=elapsed,
     )
 
@@ -620,7 +701,29 @@ async def execute_javascript(
     else:
         await ctx.warning(f"JS execution failed: {result.error}")
 
-    return sanitize_response(result.model_dump(exclude_none=True), secrets=session._secret_values)
+    # --- Security: scope disclosure ---
+    current_url = ""
+    try:
+        current_url = await asyncio.to_thread(lambda: session.driver.current_url)
+    except Exception:
+        pass
+    from urllib.parse import urlparse
+    parsed = urlparse(current_url)
+    origin = f"{parsed.scheme}://{parsed.netloc}" if parsed.scheme and parsed.netloc else current_url
+
+    scope_block = (
+        "\n[JS EXECUTION SCOPE]\n"
+        f"Ran in page context of: {current_url}\n"
+        "localStorage accessible: yes\n"
+        "sessionStorage accessible: yes\n"
+        "HttpOnly cookies: not accessible\n"
+        "Cross-origin iframes: not accessible\n"
+        f"Network requests: permitted to {origin} and any CORS-permitted origins\n"
+        "[END SCOPE]\n"
+    )
+
+    response = sanitize_response(result.model_dump(exclude_none=True), secrets=session._secret_values)
+    return scope_block + response
 
 
 # --- Tool: take_screenshot ---
@@ -764,7 +867,14 @@ async def inspect_element_tool(
     else:
         await ctx.warning(f"Element not found: {selector}")
 
-    return sanitize_response(inspection.model_dump(exclude_none=True), secrets=session._secret_values)
+    data = inspection.model_dump(exclude_none=True)
+    page_url = ""
+    try:
+        page_url = await asyncio.to_thread(lambda: session.driver.current_url)
+    except Exception:
+        pass
+    response = sanitize_response(data, secrets=session._secret_values)
+    return scan_and_warn(response, data, page_url, session.session_id, session.security_counter)
 
 
 # --- Tool: process_download ---
@@ -841,7 +951,9 @@ async def get_session_history(
         f"Session history: {len(history.actions)} actions, "
         f"{len(history.scouts)} scouts, {len(history.network_events)} network events"
     )
-    return sanitize_response(history.model_dump(exclude_none=True), secrets=session._secret_values)
+    data = history.model_dump(exclude_none=True)
+    data["security_summary"] = session.security_counter.summary()
+    return sanitize_response(data, secrets=session._secret_values)
 
 
 # --- Tool: monitor_network ---
@@ -909,12 +1021,38 @@ async def monitor_network(
             total_matched = len(all_matching)
             paginated = all_matching[offset:] if offset > 0 else all_matching
             events = paginated[:limit] if limit > 0 else paginated
-            return sanitize_response(MonitorResult(
+
+            # --- Security: POST body scrubbing ---
+            env_keys: set[str] | None = None
+            env_values: dict[str, str] | None = None
+            try:
+                env_data = _get_env_vars(app_ctx)
+                env_keys = set(env_data.keys())
+                env_values = env_data
+            except Exception:
+                pass
+
+            monitor_data = MonitorResult(
                 events=events,
                 total_captured=monitor.total_count,
                 total_matched=total_matched,
                 monitoring_active=monitor.monitoring,
-            ).model_dump(exclude_none=True), secrets=session._secret_values)
+            ).model_dump(exclude_none=True)
+
+            # Scrub POST bodies in the events
+            if monitor_data.get("events"):
+                scrubbed_events, scrubbed_count = scrub_network_events(
+                    monitor_data["events"],
+                    env_keys=env_keys,
+                    env_values=env_values,
+                    session_id=session.session_id,
+                    security_counter=session.security_counter,
+                )
+                monitor_data["events"] = scrubbed_events
+                if scrubbed_count > 0:
+                    monitor_data["scrubbed_fields"] = scrubbed_count
+
+            return sanitize_response(monitor_data, secrets=session._secret_values)
 
         case "wait_for_download":
             await ctx.info(f"Waiting for download (timeout: {timeout_ms}ms)...")
@@ -1267,6 +1405,83 @@ async def schedule_delete(
             "error": f"Failed to delete '{name}'. It may not exist.",
             "platform": scheduler.platform_name,
         }
+
+
+# --- Tool: get_security_log ---
+
+
+@mcp.tool()
+async def get_security_log(
+    session_id: str | None = None,
+    severity: str | None = None,
+    limit: int = 50,
+    ctx: Context[ServerSession, AppContext] = None,
+) -> dict:
+    """Return recent security events from the Scout security log.
+
+    Useful for auditing a session before exporting a workflow — if a session
+    had injection attempts, that should inform whether the workflow is trustworthy.
+
+    Args:
+        session_id: Filter to events from this session only.
+        severity: Filter by severity level: 'info', 'warning', or 'critical'.
+        limit: Maximum number of events to return. Default: 50.
+    """
+    limit = min(max(limit, 1), 500)
+    events = read_security_log(
+        session_id=session_id,
+        severity=severity,
+        limit=limit,
+    )
+
+    await ctx.info(f"Security log: {len(events)} event(s)")
+    return {
+        "events": events,
+        "total_returned": len(events),
+        "filters": {
+            "session_id": session_id,
+            "severity": severity,
+            "limit": limit,
+        },
+    }
+
+
+# --- Tool: allow_navigation ---
+
+
+@mcp.tool()
+async def allow_navigation(
+    session_id: str,
+    url: str,
+    ctx: Context[ServerSession, AppContext] = None,
+) -> dict:
+    """Permit a single cross-origin navigation that was blocked by the navigation guard.
+
+    Only needed in extension mode when allowed_domains is set and the agent
+    navigates to an unlisted domain. The guard never auto-permits — this
+    tool requires explicit agent invocation.
+
+    Args:
+        session_id: Active session ID.
+        url: The URL to permit navigation to.
+    """
+    app_ctx = _get_ctx(ctx)
+    session = _get_session(app_ctx, session_id)
+
+    guard = session._navigation_guard
+    if guard is None:
+        return {
+            "success": True,
+            "message": "No navigation guard active for this session (launch mode or no allowed_domains set).",
+        }
+
+    guard.permit_url(url)
+    await ctx.info(f"Navigation permitted to: {url}")
+    return {
+        "success": True,
+        "permitted_url": url,
+        "message": f"Navigation to '{url}' has been permitted. Retry the navigation.",
+    }
 
 
 # --- Entry Point ---
