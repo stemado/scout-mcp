@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import tempfile
 import threading
 import time
 from unittest.mock import MagicMock, patch
@@ -499,3 +501,26 @@ class TestEventDispatch:
             "method": "Page.loadEventFired",
             "params": {},
         })
+
+
+# --- Task 2: Cross-Platform Token File ---
+
+
+class TestTokenFileCrossPlatform:
+    """Token file uses tempfile.gettempdir() and fixed name."""
+
+    def test_token_file_fixed_name_no_pid(self):
+        """Token file should be a fixed name, no PID suffix."""
+        from scout.extension_relay import TOKEN_FILENAME
+        assert TOKEN_FILENAME == "scout-extension-token"
+        expected = os.path.join(tempfile.gettempdir(), TOKEN_FILENAME)
+        assert "scout-extension-token" in expected
+        assert str(os.getpid()) not in expected
+
+
+class TestServerBindAddress:
+    """Server must bind to 127.0.0.1 explicitly."""
+
+    def test_default_host_is_ipv4_loopback(self):
+        from scout.extension_relay import DEFAULT_HOST
+        assert DEFAULT_HOST == "127.0.0.1"

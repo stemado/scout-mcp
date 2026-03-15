@@ -17,6 +17,7 @@ import os
 import queue
 import random
 import secrets
+import tempfile
 import threading
 import time
 import uuid
@@ -47,9 +48,10 @@ class _AttrDict(dict):
 
 
 # Default relay server settings
-DEFAULT_HOST = "localhost"
+DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 9222
 DEFAULT_PATH = "/scout-extension"
+TOKEN_FILENAME = "scout-extension-token"
 CONNECT_TIMEOUT = 15  # seconds to wait for extension to connect
 
 
@@ -115,15 +117,6 @@ class ExtensionRelay:
 
         self._loop = asyncio.get_running_loop()
 
-        # Write session token to temp file for extension to read
-        self._token_file = f"/tmp/scout-extension-token-{os.getpid()}"
-        try:
-            with open(self._token_file, "w") as f:
-                f.write(self._session_token)
-            os.chmod(self._token_file, 0o600)  # Owner-only read/write
-        except Exception as e:
-            logger.warning("Failed to write token file: %s", e)
-
         self._server = await websockets.asyncio.server.serve(
             self._handle_connection,
             self._host,
@@ -132,6 +125,19 @@ class ExtensionRelay:
         )
         logger.info("Extension relay server listening on ws://%s:%d%s",
                      self._host, self._port, DEFAULT_PATH)
+
+        # Write session token to temp file AFTER server is listening (avoids race)
+        self._token_file = os.path.join(tempfile.gettempdir(), TOKEN_FILENAME)
+        try:
+            if os.name == "posix":
+                fd = os.open(self._token_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+                with os.fdopen(fd, "w") as f:
+                    f.write(self._session_token)
+            else:
+                with open(self._token_file, "w") as f:
+                    f.write(self._session_token)
+        except Exception as e:
+            logger.warning("Failed to write token file: %s", e)
 
     async def _check_origin(self, connection, request):
         """Validate Origin header on WebSocket upgrade requests.
