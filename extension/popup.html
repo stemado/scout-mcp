@@ -90,6 +90,8 @@
     }
     .status-dot.connected { background: #4ecca3; }
     .status-dot.waiting { background: #f0a500; animation: pulse 1.5s infinite; }
+    .status-dot.connecting { background: #4a90d9; animation: pulse 1s infinite; }
+    .status-dot.error { background: #e74c3c; }
     .status-dot.inactive { background: #666; }
     @keyframes pulse {
       0%, 100% { opacity: 1; }
@@ -104,6 +106,17 @@
       word-break: break-all;
       max-height: 40px;
       overflow: hidden;
+    }
+    .error-msg {
+      display: none;
+      background: #2d1b1b;
+    }
+    .error-msg span {
+      font-size: 11px;
+      color: #e74c3c;
+    }
+    .error-msg a {
+      color: #4a90d9;
     }
   </style>
 </head>
@@ -127,6 +140,12 @@
   </div>
 
   <div class="tab-url" id="tab-url" style="display: none;"></div>
+
+  <div class="status-line error-msg" id="error-msg">
+    <span>
+      Setup required — <a href="https://github.com/stemado/scout-mcp/blob/main/docs/chrome-extension.md#setup" target="_blank" rel="noopener">see docs</a>
+    </span>
+  </div>
 
   <script src="popup.js"></script>
 </body>

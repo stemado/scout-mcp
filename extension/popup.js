@@ -8,9 +8,13 @@ const statusDot = document.getElementById("status-dot");
 const statusText = document.getElementById("status-text");
 const tabUrl = document.getElementById("tab-url");
 
+const errorMsg = document.getElementById("error-msg");
+
 const STATUS_MESSAGES = {
   connected: "Connected to Scout",
   waiting: "Waiting for Scout...",
+  connecting: "Connecting...",
+  error: "Setup required",
   inactive: "Inactive",
 };
 
@@ -27,8 +31,11 @@ function updateUI(data) {
   // Status text
   statusText.textContent = STATUS_MESSAGES[status] || status;
 
+  // Error message
+  errorMsg.style.display = status === "error" ? "flex" : "none";
+
   // Tab URL
-  if (isActive && data.tabUrl) {
+  if (isActive && data.tabUrl && status !== "error") {
     tabUrl.textContent = data.tabUrl;
     tabUrl.style.display = "block";
   } else {
