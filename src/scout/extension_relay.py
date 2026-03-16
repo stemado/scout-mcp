@@ -147,8 +147,11 @@ class ExtensionRelay:
         """Validate path and Origin header on WebSocket upgrade requests.
 
         Path enforcement: only /scout-extension is accepted.
-        Origin check: browser extensions send no Origin header. A web page
-        attempting to connect would send one — reject those connections.
+        Origin check: Chrome MV3 service workers send an Origin header of
+        ``chrome-extension://<id>`` on WebSocket connections.  We allow
+        that specific origin (it proves the caller is our extension) while
+        rejecting web-page origins (http/https) which would indicate a
+        malicious page trying to reach the relay.
         """
         from websockets.http11 import Response
         from websockets.datastructures import Headers
@@ -157,14 +160,14 @@ class ExtensionRelay:
         if request.path != DEFAULT_PATH:
             return Response(404, "Not Found", Headers())
 
-        # Origin check
+        # Origin check — allow chrome-extension:// origins, reject others
         origin = None
         for header_name, header_value in request.headers.raw_items():
             if header_name.lower() == "origin":
                 origin = header_value
                 break
 
-        if origin is not None:
+        if origin is not None and not origin.startswith("chrome-extension://"):
             log_security_event(
                 session_id=None,
                 event_type="ws_rejected",

@@ -558,8 +558,8 @@ class TestPathEnforcement:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_rejects_origin_on_correct_path(self):
-        """Even on correct path, Origin header should be rejected."""
+    async def test_rejects_web_origin_on_correct_path(self):
+        """Web page origins (http/https) should be rejected with 403."""
         relay = ExtensionRelay()
         mock_request = MagicMock()
         mock_request.path = "/scout-extension"
@@ -569,6 +569,20 @@ class TestPathEnforcement:
         result = await relay._check_request(None, mock_request)
         assert result is not None
         assert result.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_allows_chrome_extension_origin(self):
+        """chrome-extension:// origins from MV3 service workers should be allowed."""
+        relay = ExtensionRelay()
+        mock_request = MagicMock()
+        mock_request.path = "/scout-extension"
+        mock_request.headers = MagicMock()
+        mock_request.headers.raw_items.return_value = [
+            ("origin", "chrome-extension://mjialmenlimilhhjgjjjofneeflihccn")
+        ]
+
+        result = await relay._check_request(None, mock_request)
+        assert result is None
 
 
 # --- Task 5: NM Registration Wiring ---
