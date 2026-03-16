@@ -25,6 +25,7 @@ from scout.extension_relay import (
     _ExtensionIframe,
     _FakeBrowser,
     _FakeTab,
+    _wrap_for_cdp,
 )
 from scout.models import ConnectionMode
 
@@ -85,6 +86,32 @@ class MockRelay:
 
     def wait_for_extension(self, timeout=15):
         return True
+
+
+# --- IIFE Wrapping Tests ---
+
+
+class TestWrapForCdp:
+    """_wrap_for_cdp wraps scripts with return statements in an IIFE."""
+
+    def test_wraps_script_with_return(self):
+        script = 'var x = 1; return x;'
+        result = _wrap_for_cdp(script)
+        assert result == f"(() => {{ {script} }})()"
+
+    def test_leaves_expression_unwrapped(self):
+        script = 'document.title'
+        assert _wrap_for_cdp(script) == script
+
+    def test_leaves_void_call_unwrapped(self):
+        script = 'window.scrollTo(0, 0)'
+        assert _wrap_for_cdp(script) == script
+
+    def test_wraps_multiline_with_return(self):
+        script = 'if (!el) return null;\nreturn {x: 1};'
+        result = _wrap_for_cdp(script)
+        assert result.startswith("(() => {")
+        assert result.endswith("})()")
 
 
 # --- ExtensionRelay Tests ---

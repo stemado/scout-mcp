@@ -31,6 +31,23 @@ logger = logging.getLogger(__name__)
 _AUTH_TIMEOUT = 2.0
 
 
+def _wrap_for_cdp(script: str) -> str:
+    """Wrap a script in an IIFE if it contains ``return`` statements.
+
+    botasaurus-driver wraps all scripts in an arrow-function IIFE, so
+    ``return`` is legal in launch mode.  Extension mode sends scripts
+    directly to CDP Runtime.evaluate, where a bare ``return`` is a
+    SyntaxError.  Wrapping in ``(() => { ... })()`` restores the
+    function-body context.
+
+    Scripts that are pure expressions (e.g. ``document.title``) are left
+    unwrapped so their value is returned naturally.
+    """
+    if "return" in script:
+        return f"(() => {{ {script} }})()"
+    return script
+
+
 class _AttrDict(dict):
     """Dict subclass that allows attribute access — bridges CDP JSON dicts
     to the attribute-access interface that botasaurus-driver's callbacks expect.
@@ -667,7 +684,7 @@ class _ExtensionElement:
     def run_js(self, script: str) -> Any:
         """Execute JavaScript and return the result."""
         result = self._relay.send_cdp_command_sync("Runtime.evaluate", {
-            "expression": script,
+            "expression": _wrap_for_cdp(script),
             "returnByValue": True,
             "awaitPromise": True,
             "userGesture": True,
@@ -753,7 +770,7 @@ class _ExtensionIframe:
         try:
             ctx_id = self._get_context_id()
             result = self._relay.send_cdp_command_sync("Runtime.evaluate", {
-                "expression": script,
+                "expression": _wrap_for_cdp(script),
                 "contextId": ctx_id,
                 "returnByValue": True,
                 "awaitPromise": True,
@@ -927,7 +944,7 @@ class ExtensionDriver:
     def run_js(self, script: str) -> Any:
         """Execute JavaScript and return the result value."""
         result = self._relay.send_cdp_command_sync("Runtime.evaluate", {
-            "expression": script,
+            "expression": _wrap_for_cdp(script),
             "returnByValue": True,
             "awaitPromise": True,
             "userGesture": True,
