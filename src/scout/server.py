@@ -146,7 +146,7 @@ async def launch_session(
     url: str | None = None,
     headless: bool = False,
     proxy: str | None = None,
-    download_dir: str = "./downloads",
+    download_dir: str | None = None,
     connection_mode: str = "launch",
     allowed_domains: list[str] | None = None,
     ctx: Context[ServerSession, AppContext] = None,
@@ -164,7 +164,8 @@ async def launch_session(
                subsystem, which imports javascript-fixes — a package that runs
                'npm install' at import time without a lockfile. Only use proxy in
                trusted environments where Node.js is installed.
-        download_dir: Directory for downloaded files. Default: './downloads'.
+        download_dir: Directory for downloaded files. Default: '~/.scout/downloads'.
+                      Relative paths are resolved from the server's working directory.
         connection_mode: How to connect to Chrome. 'launch' (default) starts a new
                          browser instance. 'extension' connects to your existing
                          Chrome via the Scout extension, preserving logged-in sessions.
@@ -174,6 +175,14 @@ async def launch_session(
                          If omitted, fill_secret works on any domain (with a warning).
     """
     app_ctx = _get_ctx(ctx)
+
+    # Resolve download_dir: use ~/.scout/downloads if not specified by user
+    if download_dir is None:
+        download_dir = os.path.join(os.path.expanduser("~"), ".scout", "downloads")
+    else:
+        # Validate user-supplied paths (blocks absolute paths, traversal)
+        from .validation import validate_directory_path
+        validate_directory_path(download_dir)
 
     # Validate connection_mode
     try:

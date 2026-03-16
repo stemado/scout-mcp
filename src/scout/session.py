@@ -16,7 +16,7 @@ from .network import NetworkMonitor
 from .screencast import ScreencastMonitor
 from .security import SecurityCounter
 from .security.navigation_guard import NavigationGuard
-from .validation import validate_directory_path, validate_url
+from .validation import validate_url
 
 if TYPE_CHECKING:
     from .extension_relay import ExtensionRelay
@@ -33,7 +33,7 @@ class BrowserSession:
         self,
         headless: bool = False,
         proxy: str | None = None,
-        download_dir: str = "./downloads",
+        download_dir: str = os.path.join(os.path.expanduser("~"), ".scout", "downloads"),
         user_agent: str | None = None,
         window_size: tuple[int, int] | None = None,
         connection_mode: ConnectionMode = ConnectionMode.LAUNCH,
@@ -41,7 +41,6 @@ class BrowserSession:
     ) -> None:
         self.session_id = uuid.uuid4().hex[:12]
         self.created_at = datetime.now(timezone.utc)
-        validate_directory_path(download_dir)
         self.download_dir = os.path.realpath(download_dir)
         self._headless = headless
         self._proxy = proxy
