@@ -71,6 +71,8 @@ class AppContext:
     _launch_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     _env_vars: dict[str, str] | None = field(default=None)
     _extension_relay: object | None = field(default=None)  # ExtensionRelay when active
+    _closed_histories: dict[str, str] = field(default_factory=dict)
+    _max_closed_histories: int = 5
 
 
 @asynccontextmanager
