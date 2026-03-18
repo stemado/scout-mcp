@@ -45,6 +45,7 @@ def execute_action(
     value: str | None = None,
     frame_context: str | None = None,
     wait_after: int = 500,
+    allow_localhost_port: int | None = None,
 ) -> tuple[ActionResult, ActionRecord]:
     """Execute a single browser action and return the result + history record.
 
@@ -117,7 +118,8 @@ def execute_action(
 
             case "navigate":
                 _require(value, "value (URL) required for navigate")
-                validate_url(value, allow_localhost=os.environ.get("SCOUT_ALLOW_LOCALHOST", "").lower() in ("1", "true", "yes"))
+                _env_allow = os.environ.get("SCOUT_ALLOW_LOCALHOST", "").lower() in ("1", "true", "yes")
+                validate_url(value, allow_localhost=_env_allow, allow_localhost_port=allow_localhost_port)
                 driver.get(value)
                 action_desc = f"Navigated to '{value}'"
 

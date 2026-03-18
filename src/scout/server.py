@@ -495,6 +495,7 @@ async def execute_action_tool(
         value,
         frame_context,
         wait_after,
+        allow_localhost_port=session._allow_localhost_port,
     )
 
     # Record in history

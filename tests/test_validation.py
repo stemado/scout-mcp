@@ -244,3 +244,41 @@ class TestValidateFilePath:
     def test_rejects_none_path(self):
         with pytest.raises(ValueError, match="File path required"):
             validate_file_path(None)
+
+
+class TestExecuteActionNavigateLocalhostPort:
+    """Verify execute_action threads allow_localhost_port to validate_url for navigate."""
+
+    def test_navigate_blocks_localhost_without_port(self):
+        """Navigate to localhost is blocked when allow_localhost_port is None."""
+        from unittest.mock import MagicMock
+        from scout.actions import execute_action
+
+        driver = MagicMock()
+        result, _record = execute_action(driver, "navigate", value="http://localhost:3000")
+        assert not result.success
+        assert "Blocked URL host" in result.error
+
+    def test_navigate_allows_localhost_with_matching_port(self):
+        """Navigate to localhost succeeds when allow_localhost_port matches."""
+        from unittest.mock import MagicMock
+        from scout.actions import execute_action
+
+        driver = MagicMock()
+        result, _record = execute_action(
+            driver, "navigate", value="http://localhost:3000", allow_localhost_port=3000
+        )
+        assert result.success
+        driver.get.assert_called_once_with("http://localhost:3000")
+
+    def test_navigate_blocks_localhost_with_wrong_port(self):
+        """Navigate to localhost:6379 is blocked when allow_localhost_port=3000."""
+        from unittest.mock import MagicMock
+        from scout.actions import execute_action
+
+        driver = MagicMock()
+        result, _record = execute_action(
+            driver, "navigate", value="http://localhost:6379", allow_localhost_port=3000
+        )
+        assert not result.success
+        assert "Blocked URL host" in result.error
