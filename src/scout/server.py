@@ -952,10 +952,26 @@ async def get_session_history(
     captured, and the sequence of URLs visited. Use this data to compose botasaurus-driver scripts.
 
     Args:
-        session_id: Active session ID.
+        session_id: Session ID (active or recently closed).
     """
     app_ctx = _get_ctx(ctx)
-    session = _get_session(app_ctx, session_id)
+
+    # Validate format before attempting lookup (preserves specific error message)
+    if not _SESSION_ID_RE.match(session_id):
+        raise ValueError("Invalid session ID format: expected 12 hex characters.")
+
+    # Try active session first
+    session = app_ctx.sessions.get(session_id)
+    if session is None or not session.is_active:
+        # Fall back to closed session archive
+        archived = app_ctx._closed_histories.get(session_id)
+        if archived is not None:
+            await ctx.info("Returning history from closed session archive.")
+            return archived
+        raise ValueError(
+            f"No session with id '{session_id}' (active or recently closed). "
+            "Use launch_session first."
+        )
 
     history: SessionHistory = session.history.get_full_history()
     await ctx.info(
