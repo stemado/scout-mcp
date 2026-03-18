@@ -42,6 +42,7 @@ class BrowserSession:
         connection_mode: ConnectionMode = ConnectionMode.LAUNCH,
         allowed_domains: list[str] | None = None,
         profile: str | None = None,
+        allow_localhost_port: int | None = None,
     ) -> None:
         self.session_id = uuid.uuid4().hex[:12]
         self.created_at = datetime.now(timezone.utc)
@@ -72,6 +73,7 @@ class BrowserSession:
         # Chrome profile: eager validation for fail-fast behavior
         self._resolve_profile_dir(profile)  # validates; raises ValueError on bad input
         self._profile = profile
+        self._allow_localhost_port = allow_localhost_port
 
         # Navigation guard (initialized on launch for extension mode)
         self._navigation_guard: NavigationGuard | None = None
@@ -151,7 +153,8 @@ class BrowserSession:
 
             current_url = "about:blank"
             if url:
-                validate_url(url, allow_localhost=os.environ.get("SCOUT_ALLOW_LOCALHOST", "").lower() in ("1", "true", "yes"))
+                _env_allow = os.environ.get("SCOUT_ALLOW_LOCALHOST", "").lower() in ("1", "true", "yes")
+                validate_url(url, allow_localhost=_env_allow, allow_localhost_port=self._allow_localhost_port)
                 self.driver.get(url)
                 current_url = self.driver.current_url
                 self.history.record_navigation(current_url)
@@ -214,7 +217,8 @@ class BrowserSession:
 
         current_url = relay.tab_url or "about:blank"
         if url:
-            validate_url(url, allow_localhost=os.environ.get("SCOUT_ALLOW_LOCALHOST", "").lower() in ("1", "true", "yes"))
+            _env_allow = os.environ.get("SCOUT_ALLOW_LOCALHOST", "").lower() in ("1", "true", "yes")
+            validate_url(url, allow_localhost=_env_allow, allow_localhost_port=self._allow_localhost_port)
             self.driver.get(url)
             current_url = self.driver.current_url
             self.history.record_navigation(current_url)
