@@ -147,6 +147,7 @@ def _get_env_vars(app_ctx: AppContext) -> dict[str, str]:
 async def launch_session(
     url: str | None = None,
     headless: bool = False,
+    profile: str | None = None,
     proxy: str | None = None,
     download_dir: str | None = None,
     connection_mode: str = "launch",
@@ -161,6 +162,13 @@ async def launch_session(
     Args:
         url: Initial URL to navigate to after launch. If omitted, opens a blank page.
         headless: Run browser in headless mode. Default: false (headed, for observation).
+        profile: Optional Chrome profile for session persistence.
+                 A bare name (e.g., 'work-portal') creates a Scout-managed profile
+                 at ~/.scout/profiles/<name>/ that persists cookies, localStorage,
+                 and all browser state across sessions.
+                 An absolute path (e.g., 'C:\\Users\\...\\User Data') uses an
+                 existing Chrome profile directory directly.
+                 If omitted, a temporary profile is used and deleted on close.
         proxy: Optional proxy URL (e.g., 'http://user:pass@host:port').
                WARNING: Using a proxy triggers botasaurus-driver's proxy authentication
                subsystem, which imports javascript-fixes — a package that runs
@@ -192,6 +200,13 @@ async def launch_session(
     except ValueError:
         return {"error": f"Invalid connection_mode: '{connection_mode}'. Use 'launch' or 'extension'."}
 
+    # Validate profile + extension mode combination
+    if profile is not None and mode == ConnectionMode.EXTENSION:
+        return {
+            "error": "Profile selection is not supported in extension mode — "
+            "the profile is determined by the Chrome instance the extension is running in."
+        }
+
     async with app_ctx._launch_lock:
         if len(app_ctx.sessions) >= app_ctx.max_sessions:
             active_ids = list(app_ctx.sessions.keys())
@@ -207,6 +222,7 @@ async def launch_session(
             download_dir=download_dir,
             connection_mode=mode,
             allowed_domains=allowed_domains,
+            profile=profile,
         )
 
         if mode == ConnectionMode.EXTENSION:

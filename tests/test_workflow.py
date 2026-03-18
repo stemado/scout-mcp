@@ -369,3 +369,45 @@ def test_converter_mixed_pre_parameterized_and_auto_detected():
     assert "APP_USERNAME" in workflow.variables
     assert workflow.steps[1].value == "${PASSWORD}"
     assert "PASSWORD" in workflow.variables
+
+
+def test_workflow_settings_profile_default():
+    settings = WorkflowSettings()
+    assert settings.profile is None
+
+
+def test_workflow_settings_profile_set():
+    settings = WorkflowSettings(profile="work-portal")
+    assert settings.profile == "work-portal"
+
+
+def test_workflow_settings_profile_excluded_when_none():
+    settings = WorkflowSettings()
+    dumped = settings.model_dump(exclude_none=True)
+    assert "profile" not in dumped
+
+
+def test_converter_propagates_profile():
+    """WorkflowConverter.from_history passes profile into WorkflowSettings."""
+    history = SessionHistory(
+        session_id="abc123",
+        started_at="2026-01-01T00:00:00Z",
+        actions=[
+            ActionRecord(action="navigate", value="https://example.com", success=True),
+        ],
+    )
+    wf = WorkflowConverter.from_history(history, name="test", profile="work-portal")
+    assert wf.settings.profile == "work-portal"
+
+
+def test_converter_no_profile_default():
+    """WorkflowConverter.from_history with no profile leaves settings.profile as None."""
+    history = SessionHistory(
+        session_id="abc123",
+        started_at="2026-01-01T00:00:00Z",
+        actions=[
+            ActionRecord(action="navigate", value="https://example.com", success=True),
+        ],
+    )
+    wf = WorkflowConverter.from_history(history, name="test")
+    assert wf.settings.profile is None

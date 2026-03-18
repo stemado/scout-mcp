@@ -28,6 +28,7 @@ class WorkflowSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     headless: bool = False
+    profile: str | None = None
     default_timeout_ms: int = Field(default=30000, ge=0)
     step_delay_ms: int = Field(default=500, ge=0)
     on_error: Literal["stop", "continue", "retry"] = "stop"
@@ -101,6 +102,7 @@ class WorkflowConverter:
         history: SessionHistory,
         name: str,
         description: str = "",
+        profile: str | None = None,
     ) -> Workflow:
         """Build a Workflow from a SessionHistory.
 
@@ -180,6 +182,7 @@ class WorkflowConverter:
             description=description,
             source=WorkflowSource(tool="scout", session_id=history.session_id),
             variables=variables,
+            settings=WorkflowSettings(profile=profile),
             steps=steps,
         )
 

@@ -160,6 +160,7 @@ class SessionInfo(BaseModel):
     current_url: str = Field(default="about:blank")
     status: str = Field(default="active")
     connection_mode: str = Field(default="launch", description="'launch' or 'extension'")
+    profile: str | None = Field(default=None, description="Profile name or path, or None for temp profile")
 
 
 class ScoutSummaryRecord(BaseModel):

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
@@ -21,6 +22,8 @@ from .validation import validate_url
 if TYPE_CHECKING:
     from .extension_relay import ExtensionRelay
 
+_PROFILE_NAME_RE = re.compile(r"^[a-zA-Z0-9._-]+$")
+
 
 class BrowserSession:
     """Manages a single browser session via botasaurus-driver or extension relay.
@@ -38,6 +41,7 @@ class BrowserSession:
         window_size: tuple[int, int] | None = None,
         connection_mode: ConnectionMode = ConnectionMode.LAUNCH,
         allowed_domains: list[str] | None = None,
+        profile: str | None = None,
     ) -> None:
         self.session_id = uuid.uuid4().hex[:12]
         self.created_at = datetime.now(timezone.utc)
@@ -65,8 +69,48 @@ class BrowserSession:
         self.security_counter = SecurityCounter()
         self._allowed_domains: list[str] | None = allowed_domains
 
+        # Chrome profile: eager validation for fail-fast behavior
+        self._resolve_profile_dir(profile)  # validates; raises ValueError on bad input
+        self._profile = profile
+
         # Navigation guard (initialized on launch for extension mode)
         self._navigation_guard: NavigationGuard | None = None
+
+    def _resolve_profile_dir(self, profile: str | None) -> str | None:
+        """Resolve a profile value to an absolute directory path.
+
+        - None or empty string → None (botasaurus creates a temp profile)
+        - Bare name → ~/.scout/profiles/<name>/ (or SCOUT_PROFILE_DIR/<name>/)
+        - Absolute path → used as-is (botasaurus detects the path separators
+          and returns it unchanged from convert_to_absolute_profile_path)
+        - Relative path with separators → rejected
+        """
+        if not profile:
+            return None
+
+        if os.path.isabs(profile):
+            return profile
+
+        # Reject relative paths with separators (ambiguous resolution)
+        if os.sep in profile or "/" in profile or "\\" in profile:
+            raise ValueError(
+                f"Profile '{profile}' must be a bare name or an absolute path. "
+                f"Relative paths with separators are not allowed."
+            )
+
+        # Validate bare name for filesystem safety
+        if not _PROFILE_NAME_RE.match(profile):
+            raise ValueError(
+                f"Profile name '{profile}' contains invalid characters. "
+                f"Use only letters, numbers, hyphens, underscores, and dots."
+            )
+
+        # Bare name → Scout-managed profile directory
+        base = os.environ.get(
+            "SCOUT_PROFILE_DIR",
+            os.path.join(os.path.expanduser("~"), ".scout", "profiles"),
+        )
+        return os.path.join(base, profile)
 
     def launch(self, url: str | None = None) -> SessionInfo:
         """Launch the browser and optionally navigate to an initial URL."""
@@ -80,6 +124,10 @@ class BrowserSession:
 
         driver_kwargs: dict = {
             "headless": self._headless,
+            # Start on about:blank instead of chrome://newtab to avoid
+            # rendering issues when navigating in headed mode (the NTP's
+            # renderer process doesn't fully release the viewport).
+            "arguments": ["about:blank"],
         }
         if self._proxy:
             driver_kwargs["proxy"] = self._proxy
@@ -87,6 +135,13 @@ class BrowserSession:
             driver_kwargs["user_agent"] = self._user_agent
         if self._window_size:
             driver_kwargs["window_size"] = self._window_size
+
+        # Pass already-resolved absolute path. Botasaurus's
+        # convert_to_absolute_profile_path detects the path separators
+        # and returns it unchanged (no double-resolution).
+        resolved_profile = self._resolve_profile_dir(self._profile)
+        if resolved_profile:
+            driver_kwargs["profile"] = resolved_profile
 
         try:
             self.driver = Driver(**driver_kwargs)
@@ -123,6 +178,7 @@ class BrowserSession:
             current_url=current_url,
             status="active",
             connection_mode=self.connection_mode.value,
+            profile=self._profile or None,
         )
 
     def _launch_extension(self, url: str | None = None) -> SessionInfo:
