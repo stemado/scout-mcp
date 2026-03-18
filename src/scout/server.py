@@ -1209,6 +1209,18 @@ async def close_session(
 
     await ctx.info(f"Closing session {session_id}...")
     result: SessionCloseResult = await asyncio.to_thread(session.close)
+
+    # Archive history for post-close retrieval (e.g., export-workflow)
+    history = session.history.get_full_history()
+    archived = history.model_dump(exclude_none=True)
+    archived["security_summary"] = session.security_counter.summary()
+    app_ctx._closed_histories[session_id] = sanitize_response(
+        archived, secrets=session._secret_values
+    )
+    if len(app_ctx._closed_histories) > app_ctx._max_closed_histories:
+        oldest = next(iter(app_ctx._closed_histories))
+        del app_ctx._closed_histories[oldest]
+
     del app_ctx.sessions[session_id]
 
     await ctx.info(
