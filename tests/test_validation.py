@@ -79,6 +79,85 @@ class TestValidateUrl:
         validate_url("")
 
 
+class TestValidateUrlLocalhostPort:
+    """Port-scoped localhost access via allow_localhost_port parameter."""
+
+    def test_allows_localhost_on_matching_port(self):
+        validate_url("http://localhost:3000/app", allow_localhost_port=3000)
+
+    def test_blocks_localhost_on_different_port(self):
+        with pytest.raises(ValueError, match="Blocked URL host"):
+            validate_url("http://localhost:6379", allow_localhost_port=3000)
+
+    def test_blocks_localhost_with_no_parameter(self):
+        with pytest.raises(ValueError, match="Blocked URL host"):
+            validate_url("http://localhost:3000")
+
+    def test_allows_127001_on_matching_port(self):
+        validate_url("http://127.0.0.1:3000/path", allow_localhost_port=3000)
+
+    def test_blocks_127001_on_different_port(self):
+        with pytest.raises(ValueError, match="Blocked URL host"):
+            validate_url("http://127.0.0.1:9200", allow_localhost_port=3000)
+
+    def test_allows_ipv6_loopback_on_matching_port(self):
+        validate_url("http://[::1]:3000/", allow_localhost_port=3000)
+
+    def test_blocks_ipv6_loopback_on_different_port(self):
+        with pytest.raises(ValueError, match="Blocked URL host"):
+            validate_url("http://[::1]:6379", allow_localhost_port=3000)
+
+    def test_allows_implicit_port_80_for_http(self):
+        validate_url("http://localhost", allow_localhost_port=80)
+
+    def test_allows_implicit_port_443_for_https(self):
+        validate_url("https://localhost", allow_localhost_port=443)
+
+    def test_allows_explicit_port_80_for_http(self):
+        validate_url("http://localhost:80/path", allow_localhost_port=80)
+
+    def test_blocks_implicit_port_when_different(self):
+        with pytest.raises(ValueError, match="Blocked URL host"):
+            validate_url("http://localhost", allow_localhost_port=3000)
+
+    def test_env_var_overrides_port_restriction(self, monkeypatch):
+        monkeypatch.setenv("SCOUT_ALLOW_LOCALHOST", "1")
+        # allow_localhost=True (from env var) should permit any port
+        validate_url("http://localhost:6379", allow_localhost=True, allow_localhost_port=3000)
+
+    def test_cloud_metadata_blocked_with_any_flags(self):
+        with pytest.raises(ValueError, match="Blocked URL host"):
+            validate_url("http://169.254.169.254/latest/meta-data/", allow_localhost_port=80)
+
+    def test_rejects_port_zero(self):
+        with pytest.raises(ValueError, match="allow_localhost_port must be 1-65535"):
+            validate_url("http://localhost:3000", allow_localhost_port=0)
+
+    def test_rejects_negative_port(self):
+        with pytest.raises(ValueError, match="allow_localhost_port must be 1-65535"):
+            validate_url("http://localhost:3000", allow_localhost_port=-1)
+
+    def test_rejects_port_above_65535(self):
+        with pytest.raises(ValueError, match="allow_localhost_port must be 1-65535"):
+            validate_url("http://localhost:3000", allow_localhost_port=70000)
+
+    def test_non_localhost_url_unaffected(self):
+        validate_url("http://example.com:3000", allow_localhost_port=3000)
+
+    def test_non_localhost_url_still_works_without_port(self):
+        validate_url("http://example.com")
+
+    def test_allows_ipv6_mapped_ipv4_loopback_on_matching_port(self):
+        validate_url("http://[::ffff:127.0.0.1]:3000/", allow_localhost_port=3000)
+
+    def test_blocks_ipv6_mapped_ipv4_loopback_on_different_port(self):
+        with pytest.raises(ValueError, match="Blocked URL host"):
+            validate_url("http://[::ffff:127.0.0.1]:6379", allow_localhost_port=3000)
+
+    def test_allows_all_ports_with_allow_localhost_true(self):
+        validate_url("http://localhost:6379", allow_localhost=True)
+
+
 # --- Directory path validation ---
 
 

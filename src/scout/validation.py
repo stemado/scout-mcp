@@ -59,7 +59,7 @@ def _is_blocked_host(hostname: str, *, allow_localhost: bool = False) -> bool:
     return False
 
 
-def validate_url(url: str, *, allow_localhost: bool = False) -> None:
+def validate_url(url: str, *, allow_localhost: bool = False, allow_localhost_port: int | None = None) -> None:
     """Validate a URL is safe to navigate to.
 
     Raises ValueError for non-http(s) schemes or blocked hosts.
@@ -67,10 +67,15 @@ def validate_url(url: str, *, allow_localhost: bool = False) -> None:
 
     Args:
         url: The URL to validate.
-        allow_localhost: If True, permit loopback addresses (for testing).
+        allow_localhost: If True, permit all loopback addresses (env var override).
+        allow_localhost_port: If set, permit loopback addresses only on this port (1-65535).
     """
     if not url:
         return
+
+    if allow_localhost_port is not None:
+        if not isinstance(allow_localhost_port, int) or allow_localhost_port < 1 or allow_localhost_port > 65535:
+            raise ValueError(f"allow_localhost_port must be 1-65535, got: {allow_localhost_port}")
 
     parsed = urlparse(url)
 
@@ -80,7 +85,20 @@ def validate_url(url: str, *, allow_localhost: bool = False) -> None:
         raise ValueError(f"Only http and https URLs are allowed, got scheme: {parsed.scheme}")
 
     hostname = parsed.hostname
-    if hostname and _is_blocked_host(hostname, allow_localhost=allow_localhost):
+    if not hostname:
+        return
+
+    # Determine effective localhost permission.
+    # allow_localhost=True (env var) grants all-ports access and takes precedence.
+    # Port-scoped access only permits the specific port.
+    effective_allow = allow_localhost
+    if not effective_allow and allow_localhost_port is not None:
+        parsed_port = parsed.port
+        if parsed_port is None:
+            parsed_port = 443 if parsed.scheme == "https" else 80
+        effective_allow = (parsed_port == allow_localhost_port)
+
+    if _is_blocked_host(hostname, allow_localhost=effective_allow):
         raise ValueError(f"Blocked URL host: {hostname}")
 
 
