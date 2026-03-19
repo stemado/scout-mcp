@@ -98,3 +98,30 @@ class TestIsProfileLocked:
         singleton = tmp_path / "SingletonLock"
         singleton.symlink_to(f"{hostname}-99999999")
         assert is_profile_locked(str(tmp_path)) is False
+
+
+from scout.profile_clone import _detect_active_profile
+
+
+class TestDetectActiveProfile:
+    """Tests for auto-detecting the active Chrome profile subdirectory."""
+
+    def test_reads_last_used_from_local_state(self, tmp_path):
+        local_state = tmp_path / "Local State"
+        local_state.write_text(json.dumps({
+            "profile": {"last_used": "Profile 1"}
+        }))
+        assert _detect_active_profile(str(tmp_path)) == "Profile 1"
+
+    def test_defaults_to_default_when_key_missing(self, tmp_path):
+        local_state = tmp_path / "Local State"
+        local_state.write_text(json.dumps({"other": "data"}))
+        assert _detect_active_profile(str(tmp_path)) == "Default"
+
+    def test_defaults_to_default_when_file_missing(self, tmp_path):
+        assert _detect_active_profile(str(tmp_path)) == "Default"
+
+    def test_defaults_to_default_when_file_corrupt(self, tmp_path):
+        local_state = tmp_path / "Local State"
+        local_state.write_text("not json {{{")
+        assert _detect_active_profile(str(tmp_path)) == "Default"
