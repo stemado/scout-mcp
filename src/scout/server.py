@@ -152,6 +152,7 @@ async def launch_session(
     download_dir: str | None = None,
     connection_mode: str = "launch",
     allowed_domains: list[str] | None = None,
+    allow_localhost_port: int | None = None,
     ctx: Context[ServerSession, AppContext] = None,
 ) -> dict:
     """Launch a new browser session via Botasaurus with anti-detection enabled.
@@ -183,6 +184,10 @@ async def launch_session(
                          typing and cross-origin navigation (extension mode).
                          Example: ['example.com', 'login.example.com'].
                          If omitted, fill_secret works on any domain (with a warning).
+        allow_localhost_port: Optional port number (1-65535) to allow localhost/loopback
+                             navigation on. Example: 3000 permits http://localhost:3000 only.
+                             If omitted, localhost is blocked. The SCOUT_ALLOW_LOCALHOST env var
+                             overrides this to allow all ports.
     """
     app_ctx = _get_ctx(ctx)
 
@@ -207,6 +212,19 @@ async def launch_session(
             "the profile is determined by the Chrome instance the extension is running in."
         }
 
+    # Hint: detect localhost URL without allow_localhost_port
+    if url and allow_localhost_port is None:
+        from urllib.parse import urlparse as _urlparse
+        _parsed = _urlparse(url)
+        _host = (_parsed.hostname or "").lower()
+        _env_allow = os.environ.get("SCOUT_ALLOW_LOCALHOST", "").lower() in ("1", "true", "yes")
+        if not _env_allow and (_host in ("localhost",) or _host.startswith("127.") or _host == "::1"):
+            _port = _parsed.port or (443 if _parsed.scheme == "https" else 80)
+            return {
+                "error": f"Localhost navigation is blocked by default. "
+                f"To access {url}, pass allow_localhost_port={_port} to launch_session."
+            }
+
     async with app_ctx._launch_lock:
         if len(app_ctx.sessions) >= app_ctx.max_sessions:
             active_ids = list(app_ctx.sessions.keys())
@@ -223,6 +241,7 @@ async def launch_session(
             connection_mode=mode,
             allowed_domains=allowed_domains,
             profile=profile,
+            allow_localhost_port=allow_localhost_port,
         )
 
         if mode == ConnectionMode.EXTENSION:
