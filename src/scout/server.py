@@ -275,6 +275,11 @@ async def launch_session(
             await ctx.info(f"Launching browser session {session.session_id}...")
 
         info: SessionInfo = await asyncio.to_thread(session.launch, url)
+        if info.profile_cloned:
+            clone_msg = "Profile was locked — launched with a cloned copy for this session."
+            if info.clone_warnings:
+                clone_msg += f" Warnings: {'; '.join(info.clone_warnings)}"
+            await ctx.info(clone_msg)
         app_ctx.sessions[session.session_id] = session
 
     await ctx.info(f"Session {session.session_id} active at {info.current_url}")
