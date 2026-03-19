@@ -228,10 +228,12 @@ class RecordingResult(BaseModel):
 
     recording_active: bool = Field(default=False)
     video_path: str | None = Field(default=None, description="Path to encoded MP4 file")
+    gif_path: str | None = Field(default=None, description="Path to encoded GIF file")
     frames_dir: str | None = Field(default=None, description="Path to raw frames if encoding unavailable")
     frame_count: int = Field(default=0)
     duration_seconds: float = Field(default=0.0)
-    encoded: bool = Field(default=False, description="Whether frames were encoded to video")
+    encoded: bool = Field(default=False, description="Whether frames were encoded to video/gif")
+    output_format: str = Field(default="mp4", description="Output format: mp4 or gif")
     started_at: str | None = Field(default=None)
     elapsed_seconds: float = Field(default=0.0)
     target_fps: int = Field(default=15)
@@ -248,6 +250,8 @@ class RecordingRecord(BaseModel):
     duration_seconds: float = 0.0
     frame_count: int = 0
     video_path: str | None = None
+    gif_path: str | None = None
+    output_format: str = "mp4"
     encoded: bool = False
     timestamp: str = ""
 
