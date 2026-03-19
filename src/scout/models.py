@@ -161,6 +161,8 @@ class SessionInfo(BaseModel):
     status: str = Field(default="active")
     connection_mode: str = Field(default="launch", description="'launch' or 'extension'")
     profile: str | None = Field(default=None, description="Profile name or path, or None for temp profile")
+    profile_cloned: bool = Field(default=False, description="True if profile was cloned due to lock")
+    clone_warnings: list[str] | None = Field(default=None, description="Warnings from partial clone")
 
 
 class ScoutSummaryRecord(BaseModel):
