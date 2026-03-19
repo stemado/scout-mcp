@@ -136,3 +136,98 @@ def _detect_active_profile(user_data_dir: str) -> str:
         return data.get("profile", {}).get("last_used", "Default") or "Default"
     except (FileNotFoundError, json.JSONDecodeError, KeyError, OSError):
         return "Default"
+
+
+# --- Profile Cloning ---
+
+
+def _clones_base_dir() -> str:
+    """Return the base directory for profile clones."""
+    base = os.environ.get(
+        "SCOUT_PROFILE_DIR",
+        os.path.join(os.path.expanduser("~"), ".scout", "profiles"),
+    )
+    return os.path.join(base, _CLONES_DIR_NAME)
+
+
+def clone_profile(
+    source_dir: str, session_id: str
+) -> tuple[str, list[str]]:
+    """Selectively clone a locked Chrome profile for session use.
+
+    Copies only session-essential files (cookies, login data, preferences,
+    local storage) while skipping caches (~490MB savings). Automatically
+    detects the active profile subdirectory from Local State.
+
+    Args:
+        source_dir: Path to the Chrome User Data directory.
+        session_id: Unique session ID for the clone directory name.
+
+    Returns:
+        (clone_path, warnings) — clone_path is the absolute path to the
+        cloned User Data directory; warnings is a list of non-fatal issues.
+    """
+    warnings: list[str] = []
+    profile_subdir = _detect_active_profile(source_dir)
+
+    clone_dir = os.path.join(_clones_base_dir(), session_id)
+    os.makedirs(clone_dir, exist_ok=True)
+
+    # 1. Copy root files (Local State, etc.)
+    for filename in _ROOT_FILES:
+        src = os.path.join(source_dir, filename)
+        dst = os.path.join(clone_dir, filename)
+        try:
+            shutil.copy2(src, dst)
+        except FileNotFoundError:
+            logger.debug("Root file not found (skipping): %s", filename)
+        except (PermissionError, OSError) as e:
+            warnings.append(f"Could not copy {filename}: {e}")
+
+    # 2. Create profile subdirectory in clone
+    clone_profile_dir = os.path.join(clone_dir, profile_subdir)
+    os.makedirs(clone_profile_dir, exist_ok=True)
+
+    source_profile_dir = os.path.join(source_dir, profile_subdir)
+    if not os.path.isdir(source_profile_dir):
+        warnings.append(
+            f"Profile subdirectory '{profile_subdir}' not found in source. "
+            f"Clone may not contain session data."
+        )
+        return clone_dir, warnings
+
+    # 3. Copy individual files by prefix glob (catches -journal, -wal, -shm)
+    for prefix in _PROFILE_FILE_PREFIXES:
+        pattern = os.path.join(source_profile_dir, f"{prefix}*")
+        matches = glob(pattern)
+        for src_path in matches:
+            basename = os.path.basename(src_path)
+            if basename in _LOCK_FILES:
+                continue
+            dst_path = os.path.join(clone_profile_dir, basename)
+            try:
+                shutil.copy2(src_path, dst_path)
+            except (PermissionError, OSError) as e:
+                warnings.append(f"Could not copy {basename}: {e}")
+
+    # 4. Copy subdirectories recursively
+    for dirname in _PROFILE_DIRS:
+        src_subdir = os.path.join(source_profile_dir, dirname)
+        dst_subdir = os.path.join(clone_profile_dir, dirname)
+        if not os.path.isdir(src_subdir):
+            continue
+        try:
+            shutil.copytree(
+                src_subdir,
+                dst_subdir,
+                dirs_exist_ok=True,
+                ignore=shutil.ignore_patterns(*_LOCK_FILES),
+            )
+        except (PermissionError, OSError) as e:
+            warnings.append(f"Could not copy directory {dirname}: {e}")
+
+    logger.info(
+        "Cloned profile from %s to %s (subdir=%s, warnings=%d)",
+        source_dir, clone_dir, profile_subdir, len(warnings),
+    )
+    return clone_dir, warnings

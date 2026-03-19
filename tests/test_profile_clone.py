@@ -125,3 +125,134 @@ class TestDetectActiveProfile:
         local_state = tmp_path / "Local State"
         local_state.write_text("not json {{{")
         assert _detect_active_profile(str(tmp_path)) == "Default"
+
+
+# --- Task 4: Profile Cloning ---
+
+from scout.profile_clone import clone_profile, _CLONES_DIR_NAME
+
+
+def _create_mock_chrome_profile(base: Path, profile_subdir: str = "Default") -> Path:
+    """Create a minimal mock Chrome User Data directory for testing."""
+    profile = base / profile_subdir
+    profile.mkdir(parents=True)
+
+    # Root files
+    (base / "Local State").write_text(json.dumps({
+        "profile": {"last_used": profile_subdir},
+        "os_crypt": {"encrypted_key": "fake-key"},
+    }))
+    (base / "lockfile").write_bytes(b"")
+
+    # Profile files (with journals)
+    (profile / "Login Data").write_bytes(b"sqlite-login")
+    (profile / "Login Data-journal").write_bytes(b"journal-login")
+    (profile / "Web Data").write_bytes(b"sqlite-web")
+    (profile / "Preferences").write_text('{"prefs": true}')
+    (profile / "Secure Preferences").write_text('{"secure": true}')
+    (profile / "Cookies").write_bytes(b"legacy-cookies")
+    (profile / "Extension Cookies").write_bytes(b"ext-cookies")
+    (profile / "Extension Cookies-journal").write_bytes(b"ext-cookies-j")
+    (profile / "Favicons").write_bytes(b"favicons-data")
+    (profile / "Favicons-journal").write_bytes(b"favicons-j")
+
+    # Network directory (Chrome 96+ cookies location)
+    network = profile / "Network"
+    network.mkdir()
+    (network / "Cookies").write_bytes(b"network-cookies")
+    (network / "Cookies-journal").write_bytes(b"network-cookies-j")
+    (network / "TransportSecurity").write_bytes(b"hsts")
+
+    # Local Storage (LevelDB)
+    ls = profile / "Local Storage" / "leveldb"
+    ls.mkdir(parents=True)
+    (ls / "000003.log").write_bytes(b"leveldb-log")
+
+    # IndexedDB
+    idb = profile / "IndexedDB"
+    idb.mkdir()
+    (idb / "https_example.com_0.indexeddb.leveldb").mkdir()
+
+    # Cache directories (should NOT be cloned)
+    (profile / "Code Cache" / "js").mkdir(parents=True)
+    (profile / "Code Cache" / "js" / "big_file.bin").write_bytes(b"x" * 1000)
+    (profile / "Cache" / "Cache_Data").mkdir(parents=True)
+    (profile / "GPUCache").mkdir()
+    (profile / "Service Worker" / "CacheStorage").mkdir(parents=True)
+
+    return base
+
+
+class TestCloneProfile:
+    """Tests for selective profile cloning."""
+
+    def test_copies_local_state(self, tmp_path):
+        source = _create_mock_chrome_profile(tmp_path / "source")
+        clone_path, warnings = clone_profile(str(source), "test-session-1")
+        assert os.path.exists(os.path.join(clone_path, "Local State"))
+
+    def test_copies_profile_files_with_journals(self, tmp_path):
+        source = _create_mock_chrome_profile(tmp_path / "source")
+        clone_path, warnings = clone_profile(str(source), "test-session-2")
+        profile_dir = os.path.join(clone_path, "Default")
+        assert os.path.exists(os.path.join(profile_dir, "Login Data"))
+        assert os.path.exists(os.path.join(profile_dir, "Login Data-journal"))
+        assert os.path.exists(os.path.join(profile_dir, "Web Data"))
+
+    def test_copies_network_directory(self, tmp_path):
+        source = _create_mock_chrome_profile(tmp_path / "source")
+        clone_path, warnings = clone_profile(str(source), "test-session-3")
+        network_dir = os.path.join(clone_path, "Default", "Network")
+        assert os.path.exists(os.path.join(network_dir, "Cookies"))
+        assert os.path.exists(os.path.join(network_dir, "Cookies-journal"))
+
+    def test_copies_local_storage(self, tmp_path):
+        source = _create_mock_chrome_profile(tmp_path / "source")
+        clone_path, warnings = clone_profile(str(source), "test-session-4")
+        ls_dir = os.path.join(clone_path, "Default", "Local Storage")
+        assert os.path.isdir(ls_dir)
+
+    def test_skips_cache_directories(self, tmp_path):
+        source = _create_mock_chrome_profile(tmp_path / "source")
+        clone_path, warnings = clone_profile(str(source), "test-session-5")
+        profile_dir = os.path.join(clone_path, "Default")
+        assert not os.path.exists(os.path.join(profile_dir, "Code Cache"))
+        assert not os.path.exists(os.path.join(profile_dir, "Cache"))
+        assert not os.path.exists(os.path.join(profile_dir, "GPUCache"))
+        assert not os.path.exists(os.path.join(profile_dir, "Service Worker"))
+
+    def test_lock_files_not_copied(self, tmp_path):
+        source = _create_mock_chrome_profile(tmp_path / "source")
+        clone_path, warnings = clone_profile(str(source), "test-session-6")
+        assert not os.path.exists(os.path.join(clone_path, "lockfile"))
+
+    def test_clone_destination_under_scout_clones(self, tmp_path, monkeypatch):
+        source = _create_mock_chrome_profile(tmp_path / "source")
+        clones_base = tmp_path / "scout-profiles"
+        monkeypatch.setenv("SCOUT_PROFILE_DIR", str(clones_base))
+        clone_path, warnings = clone_profile(str(source), "session-abc")
+        assert _CLONES_DIR_NAME in clone_path
+        assert "session-abc" in clone_path
+
+    def test_auto_detects_profile_subdir(self, tmp_path):
+        source = _create_mock_chrome_profile(tmp_path / "source", "Profile 1")
+        clone_path, warnings = clone_profile(str(source), "test-session-7")
+        assert os.path.isdir(os.path.join(clone_path, "Profile 1"))
+        assert not os.path.isdir(os.path.join(clone_path, "Default"))
+
+    def test_missing_optional_file_produces_warning(self, tmp_path):
+        source = tmp_path / "source"
+        source.mkdir()
+        (source / "Local State").write_text(json.dumps({
+            "profile": {"last_used": "Default"},
+        }))
+        profile = source / "Default"
+        profile.mkdir()
+        (profile / "Preferences").write_text("{}")
+        clone_path, warnings = clone_profile(str(source), "test-session-8")
+        assert os.path.exists(os.path.join(clone_path, "Default", "Preferences"))
+
+    def test_returns_no_warnings_on_clean_clone(self, tmp_path):
+        source = _create_mock_chrome_profile(tmp_path / "source")
+        _, warnings = clone_profile(str(source), "test-session-9")
+        assert warnings == []
