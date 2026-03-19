@@ -143,20 +143,28 @@ class ScreencastMonitor:
         self._safety_timer.daemon = True
         self._safety_timer.start()
 
-    def stop(self) -> dict:
-        """Stop recording and encode video.
+    def stop(self, output_format: str = "mp4") -> dict:
+        """Stop recording and encode video/gif.
 
-        Returns dict with: video_path, frames_dir, frame_count,
-        duration_seconds, encoded, and optionally encode_warning.
+        Args:
+            output_format: "mp4" (default) or "gif". Invalid values fall back to mp4.
+
+        Returns dict with: video_path, gif_path, frames_dir, frame_count,
+        duration_seconds, encoded, output_format, and optionally encode_warning.
         """
+        if output_format not in ("mp4", "gif"):
+            output_format = "mp4"
+
         with self._lock:
             if not self.recording:
                 return {
                     "video_path": None,
+                    "gif_path": None,
                     "frames_dir": None,
                     "frame_count": 0,
                     "duration_seconds": 0.0,
                     "encoded": False,
+                    "output_format": output_format,
                     "error": "No recording in progress.",
                 }
             self.recording = False
@@ -181,15 +189,20 @@ class ScreencastMonitor:
             frame_count = self._frame_count
             frames_dir = self._frames_dir
 
-        # Attempt video encoding
-        video_path = None
+        # Attempt encoding
+        output_path = None
         encoded = False
         encode_warning = None
 
         if frame_count > 0:
-            video_path, encoded, encode_warning = self._encode_video(
-                frames_dir, frame_count
-            )
+            if output_format == "gif":
+                output_path, encoded, encode_warning = self._encode_gif(
+                    frames_dir, frame_count
+                )
+            else:
+                output_path, encoded, encode_warning = self._encode_video(
+                    frames_dir, frame_count
+                )
 
         self._encoding_succeeded = encoded
 
@@ -201,11 +214,13 @@ class ScreencastMonitor:
                 pass
 
         result = {
-            "video_path": video_path,
+            "video_path": output_path if output_format == "mp4" else None,
+            "gif_path": output_path if output_format == "gif" else None,
             "frames_dir": frames_dir if not encoded else None,
             "frame_count": frame_count,
             "duration_seconds": round(duration, 1),
             "encoded": encoded,
+            "output_format": output_format,
         }
         if encode_warning:
             result["encode_warning"] = encode_warning
@@ -357,3 +372,86 @@ class ScreencastMonitor:
             )
         except Exception as e:
             return None, False, f"Encoding failed: {e}. Frames at: {frames_dir}"
+
+    def _encode_gif(
+        self, frames_dir: str, frame_count: int,
+        max_width: int = 800, gif_fps: int = 10,
+    ) -> tuple[str | None, bool, str | None]:
+        """Encode frames to GIF using ffmpeg with palette optimization.
+
+        Returns (gif_path, success, error_message).
+        Uses two-pass encoding: palettegen then paletteuse for quality.
+        """
+        if frame_count == 0:
+            return None, False, "No frames to encode"
+
+        ffmpeg = _find_ffmpeg()
+        if ffmpeg is None:
+            return None, False, (
+                "ffmpeg not found. Frames saved to: "
+                f"{frames_dir}. Install with: pip install 'imageio-ffmpeg' "
+                "or install ffmpeg on your system PATH."
+            )
+
+        frame_pattern = os.path.join(frames_dir, "frame_%06d.png")
+        first_frame = os.path.join(frames_dir, "frame_000000.png")
+        if not os.path.isfile(first_frame):
+            return None, False, "No frame files found in temp directory"
+
+        gif_filename = (
+            f"recording_{datetime.now().strftime('%Y%m%d_%H%M%S')}.gif"
+        )
+        gif_path = os.path.join(self.output_dir, gif_filename)
+
+        effective_fps = min(gif_fps, self._target_fps)
+
+        palette_path = os.path.join(frames_dir, "palette.png")
+        filters = f"fps={effective_fps},scale={max_width}:-1:flags=lanczos"
+
+        encoding_timeout = max(FFMPEG_TIMEOUT_MINIMUM, frame_count // 15)
+
+        try:
+            cmd_palette = [
+                ffmpeg, "-y",
+                "-framerate", str(self._target_fps),
+                "-i", frame_pattern,
+                "-vf", f"{filters},palettegen=stats_mode=diff",
+                palette_path,
+            ]
+            result = subprocess.run(
+                cmd_palette, capture_output=True, timeout=encoding_timeout,
+            )
+            if result.returncode != 0:
+                stderr = result.stderr.decode(errors="replace")[:500]
+                return None, False, f"GIF palette generation failed: {stderr}"
+
+            cmd_gif = [
+                ffmpeg, "-y",
+                "-framerate", str(self._target_fps),
+                "-i", frame_pattern,
+                "-i", palette_path,
+                "-lavfi", f"{filters} [x]; [x][1:v] paletteuse=dither=bayer:bayer_scale=5",
+                gif_path,
+            ]
+            result = subprocess.run(
+                cmd_gif, capture_output=True, timeout=encoding_timeout,
+            )
+            if result.returncode != 0:
+                stderr = result.stderr.decode(errors="replace")[:500]
+                return None, False, f"GIF encoding failed: {stderr}"
+
+            return gif_path, True, None
+
+        except subprocess.TimeoutExpired:
+            return None, False, (
+                f"GIF encoding timed out after {encoding_timeout}s "
+                f"({frame_count} frames). Frames at: {frames_dir}"
+            )
+        except Exception as e:
+            return None, False, f"GIF encoding failed: {e}. Frames at: {frames_dir}"
+        finally:
+            if os.path.isfile(palette_path):
+                try:
+                    os.remove(palette_path)
+                except Exception:
+                    pass
