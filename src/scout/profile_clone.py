@@ -231,3 +231,35 @@ def clone_profile(
         source_dir, clone_dir, profile_subdir, len(warnings),
     )
     return clone_dir, warnings
+
+
+# --- Cleanup ---
+
+
+def cleanup_clone(clone_dir: str) -> None:
+    """Remove a clone directory. Idempotent — no error if already gone."""
+    if os.path.isdir(clone_dir):
+        shutil.rmtree(clone_dir, ignore_errors=True)
+        logger.info("Cleaned up clone directory: %s", clone_dir)
+
+
+def cleanup_orphaned_clones() -> None:
+    """Sweep the _clones/ directory for entries older than 24 hours.
+
+    Called as best-effort housekeeping before creating a new clone.
+    """
+    clones_dir = _clones_base_dir()
+    if not os.path.isdir(clones_dir):
+        return
+
+    now = time.time()
+    for entry in os.scandir(clones_dir):
+        if not entry.is_dir():
+            continue
+        try:
+            age = now - entry.stat().st_mtime
+            if age > _ORPHAN_MAX_AGE_SECONDS:
+                shutil.rmtree(entry.path, ignore_errors=True)
+                logger.info("Removed orphaned clone: %s (age=%.0fh)", entry.name, age / 3600)
+        except OSError:
+            pass

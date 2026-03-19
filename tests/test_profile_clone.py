@@ -256,3 +256,50 @@ class TestCloneProfile:
         source = _create_mock_chrome_profile(tmp_path / "source")
         _, warnings = clone_profile(str(source), "test-session-9")
         assert warnings == []
+
+
+# --- Task 5: Cleanup Functions ---
+
+from scout.profile_clone import cleanup_clone, cleanup_orphaned_clones
+
+
+class TestCleanupClone:
+    """Tests for clone directory removal."""
+
+    def test_removes_clone_directory(self, tmp_path):
+        clone_dir = tmp_path / "clone-to-remove"
+        clone_dir.mkdir()
+        (clone_dir / "some_file.txt").write_text("data")
+        cleanup_clone(str(clone_dir))
+        assert not clone_dir.exists()
+
+    def test_idempotent_on_missing_directory(self, tmp_path):
+        cleanup_clone(str(tmp_path / "nonexistent"))
+
+
+class TestOrphanCleanup:
+    """Tests for stale clone directory sweep."""
+
+    def test_removes_old_clones(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SCOUT_PROFILE_DIR", str(tmp_path))
+        clones_dir = tmp_path / _CLONES_DIR_NAME
+        clones_dir.mkdir()
+        old_clone = clones_dir / "old-session"
+        old_clone.mkdir()
+        old_time = time.time() - (25 * 60 * 60)
+        os.utime(str(old_clone), (old_time, old_time))
+        cleanup_orphaned_clones()
+        assert not old_clone.exists()
+
+    def test_preserves_recent_clones(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SCOUT_PROFILE_DIR", str(tmp_path))
+        clones_dir = tmp_path / _CLONES_DIR_NAME
+        clones_dir.mkdir()
+        recent_clone = clones_dir / "recent-session"
+        recent_clone.mkdir()
+        cleanup_orphaned_clones()
+        assert recent_clone.exists()
+
+    def test_no_error_when_clones_dir_missing(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SCOUT_PROFILE_DIR", str(tmp_path))
+        cleanup_orphaned_clones()
