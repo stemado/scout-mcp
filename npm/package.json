@@ -1,6 +1,6 @@
 {
   "name": "@stemado/scout-mcp",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "MCP server for browser automation with anti-detection. Scout pages, find elements, interact with websites, and monitor network traffic.",
   "license": "MIT",
   "author": "sdoherty",
