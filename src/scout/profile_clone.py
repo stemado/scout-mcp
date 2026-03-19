@@ -144,17 +144,37 @@ def _detect_active_profile(user_data_dir: str) -> str:
 
 
 def _copy_with_sqlite_fallback(src: str, dst: str) -> None:
-    """Copy a file, falling back to SQLite backup for locked databases.
+    """Copy a file, falling back to esentutl/SQLite for locked databases.
 
-    Chrome holds exclusive locks on some SQLite databases (e.g., Cookies)
-    while running. When shutil.copy2 fails with PermissionError, we attempt
-    a SQLite backup which handles database locking at the SQLite protocol
-    level. If both fail, the original PermissionError is re-raised.
+    Chrome exclusively locks some SQLite databases (e.g., Network/Cookies)
+    while running — no sharing flags, so even CreateFile with FILE_SHARE_ALL
+    gets ERROR_SHARING_VIOLATION. Fallback chain:
+
+    1. shutil.copy2 (normal copy)
+    2. esentutl.exe /y (Windows only — uses Volume Shadow Copy, works on
+       any locked file, no admin required)
+    3. sqlite3.backup (works when SQLite-level locks allow opening)
+
+    If all fail, the original PermissionError is re-raised.
     """
     try:
         shutil.copy2(src, dst)
     except PermissionError as original_err:
-        # Try SQLite backup — works for some locked databases
+        # Fallback 1: esentutl.exe (Windows) — uses VSS to read locked files
+        if platform.system() == "Windows":
+            try:
+                import subprocess
+                result = subprocess.run(
+                    ["esentutl.exe", "/y", src, "/d", dst, "/o"],
+                    capture_output=True, timeout=30,
+                )
+                if result.returncode == 0 and os.path.exists(dst):
+                    logger.debug("Used esentutl for locked file: %s", src)
+                    return
+            except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+                pass
+
+        # Fallback 2: SQLite backup — works for some locked databases
         try:
             src_conn = sqlite3.connect(src, timeout=1)
             dst_conn = sqlite3.connect(dst)
@@ -163,7 +183,7 @@ def _copy_with_sqlite_fallback(src: str, dst: str) -> None:
             src_conn.close()
             logger.debug("Used SQLite backup for locked file: %s", src)
         except (sqlite3.Error, OSError):
-            # Both methods failed — re-raise original PermissionError
+            # All methods failed — re-raise original PermissionError
             raise original_err
 
 
