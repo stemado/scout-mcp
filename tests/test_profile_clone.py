@@ -303,3 +303,114 @@ class TestOrphanCleanup:
     def test_no_error_when_clones_dir_missing(self, tmp_path, monkeypatch):
         monkeypatch.setenv("SCOUT_PROFILE_DIR", str(tmp_path))
         cleanup_orphaned_clones()
+
+
+# --- Task 6: BrowserSession Integration ---
+
+
+class TestBrowserSessionClone:
+    """Integration tests: clone flows through BrowserSession."""
+
+    @patch("scout.session.Driver")
+    @patch("scout.profile_clone.is_profile_locked", return_value=True)
+    @patch("scout.profile_clone.clone_profile")
+    @patch("scout.profile_clone.cleanup_orphaned_clones")
+    def test_clone_used_when_profile_locked(
+        self, mock_orphans, mock_clone, mock_locked, MockDriver, tmp_path
+    ):
+        source = _create_mock_chrome_profile(tmp_path / "source")
+        clone_dir = str(tmp_path / "clone-dest")
+        os.makedirs(clone_dir, exist_ok=True)
+        mock_clone.return_value = (clone_dir, [])
+
+        mock_driver = MagicMock()
+        mock_driver.current_url = "about:blank"
+        mock_driver._browser.info = {}
+        MockDriver.return_value = mock_driver
+
+        session = BrowserSession(profile=str(source), download_dir=str(tmp_path / "dl"))
+        info = session.launch()
+
+        # Driver should receive the clone path, not the source
+        call_kwargs = MockDriver.call_args[1]
+        assert call_kwargs["profile"] == clone_dir
+        assert info.profile_cloned is True
+
+    @patch("scout.session.Driver")
+    @patch("scout.profile_clone.is_profile_locked", return_value=False)
+    def test_no_clone_when_profile_unlocked(self, mock_locked, MockDriver, tmp_path):
+        source = _create_mock_chrome_profile(tmp_path / "source")
+
+        mock_driver = MagicMock()
+        mock_driver.current_url = "about:blank"
+        mock_driver._browser.info = {}
+        MockDriver.return_value = mock_driver
+
+        session = BrowserSession(profile=str(source), download_dir=str(tmp_path / "dl"))
+        info = session.launch()
+
+        call_kwargs = MockDriver.call_args[1]
+        assert call_kwargs["profile"] == str(source)
+        assert info.profile_cloned is False
+
+    @patch("scout.session.Driver")
+    @patch("scout.profile_clone.is_profile_locked", return_value=True)
+    @patch("scout.profile_clone.clone_profile")
+    @patch("scout.profile_clone.cleanup_orphaned_clones")
+    def test_clone_cleaned_up_on_close(
+        self, mock_orphans, mock_clone, mock_locked, MockDriver, tmp_path
+    ):
+        source = _create_mock_chrome_profile(tmp_path / "source")
+        clone_dir = tmp_path / "clone-to-cleanup"
+        clone_dir.mkdir()
+        (clone_dir / "file.txt").write_text("temp")
+        mock_clone.return_value = (str(clone_dir), [])
+
+        mock_driver = MagicMock()
+        mock_driver.current_url = "about:blank"
+        mock_driver._browser.info = {}
+        MockDriver.return_value = mock_driver
+
+        session = BrowserSession(profile=str(source), download_dir=str(tmp_path / "dl"))
+        session.launch()
+        session.close()
+
+        assert not clone_dir.exists()
+
+    @patch("scout.session.Driver")
+    @patch("scout.profile_clone.is_profile_locked", return_value=True)
+    @patch("scout.profile_clone.clone_profile")
+    @patch("scout.profile_clone.cleanup_orphaned_clones")
+    def test_session_info_includes_warnings(
+        self, mock_orphans, mock_clone, mock_locked, MockDriver, tmp_path
+    ):
+        source = _create_mock_chrome_profile(tmp_path / "source")
+        clone_dir = str(tmp_path / "clone")
+        os.makedirs(clone_dir, exist_ok=True)
+        mock_clone.return_value = (clone_dir, ["Could not copy Login Data: locked"])
+
+        mock_driver = MagicMock()
+        mock_driver.current_url = "about:blank"
+        mock_driver._browser.info = {}
+        MockDriver.return_value = mock_driver
+
+        session = BrowserSession(profile=str(source), download_dir=str(tmp_path / "dl"))
+        info = session.launch()
+
+        assert info.clone_warnings == ["Could not copy Login Data: locked"]
+
+    @patch("scout.session.Driver")
+    def test_no_clone_when_profile_dir_missing(self, MockDriver, tmp_path):
+        """Non-existent profile path: no lock check, no clone."""
+        mock_driver = MagicMock()
+        mock_driver.current_url = "about:blank"
+        mock_driver._browser.info = {}
+        MockDriver.return_value = mock_driver
+
+        missing_path = str(tmp_path / "nonexistent-profile")
+        session = BrowserSession(profile=missing_path, download_dir=str(tmp_path / "dl"))
+        info = session.launch()
+
+        call_kwargs = MockDriver.call_args[1]
+        assert call_kwargs["profile"] == missing_path
+        assert info.profile_cloned is False

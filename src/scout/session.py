@@ -73,6 +73,9 @@ class BrowserSession:
         # Chrome profile: eager validation for fail-fast behavior
         self._resolve_profile_dir(profile)  # validates; raises ValueError on bad input
         self._profile = profile
+        self._clone_dir: str | None = None
+        self._profile_cloned: bool = False
+        self._clone_warnings: list[str] = []
         self._allow_localhost_port = allow_localhost_port
 
         # Navigation guard (initialized on launch for extension mode)
@@ -138,10 +141,17 @@ class BrowserSession:
         if self._window_size:
             driver_kwargs["window_size"] = self._window_size
 
-        # Pass already-resolved absolute path. Botasaurus's
-        # convert_to_absolute_profile_path detects the path separators
-        # and returns it unchanged (no double-resolution).
+        # --- Profile lock detection and cloning ---
         resolved_profile = self._resolve_profile_dir(self._profile)
+        if resolved_profile and os.path.isdir(resolved_profile):
+            from .profile_clone import is_profile_locked, clone_profile, cleanup_orphaned_clones
+            cleanup_orphaned_clones()
+            if is_profile_locked(resolved_profile):
+                clone_path, warnings = clone_profile(resolved_profile, self.session_id)
+                resolved_profile = clone_path
+                self._clone_dir = clone_path
+                self._profile_cloned = True
+                self._clone_warnings = warnings
         if resolved_profile:
             driver_kwargs["profile"] = resolved_profile
 
@@ -182,6 +192,8 @@ class BrowserSession:
             status="active",
             connection_mode=self.connection_mode.value,
             profile=self._profile or None,
+            profile_cloned=self._profile_cloned,
+            clone_warnings=self._clone_warnings or None,
         )
 
     def _launch_extension(self, url: str | None = None) -> SessionInfo:
@@ -265,6 +277,12 @@ class BrowserSession:
             except Exception:
                 pass
             self.driver = None
+
+        # Clean up cloned profile directory
+        if self._clone_dir and os.path.isdir(self._clone_dir):
+            from .profile_clone import cleanup_clone
+            cleanup_clone(self._clone_dir)
+            self._clone_dir = None
 
         return SessionCloseResult(
             closed=True,
