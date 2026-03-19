@@ -17,7 +17,7 @@ Scout reads the page structure, then acts — the same way you'd inspect a page 
 3. **Act** — click, type, select, navigate
 4. **Scout again** — see what changed
 
-Most browser-automation tools for AI take full-page screenshots and have the model interpret pixels. A single Playwright MCP screenshot costs ~124,000 tokens and the model still has to guess at selectors from what it sees. Scout reads the DOM directly and returns a compact report (~200 tokens) with exact CSS selectors — 98% less than a screenshot.
+Most browser-automation tools for AI take full-page screenshots and have the model interpret pixels. A single Playwright MCP screenshot adds ~124,000 tokens to the conversation context — and the model still has to guess at selectors from what it sees. Scout reads the DOM directly and returns a compact report (~200 tokens) with exact CSS selectors. An entire multi-step task with Scout uses fewer tokens than a single Playwright page snapshot.
 
 ## See It In Action
 
@@ -69,7 +69,7 @@ Full setup guide and troubleshooting: [docs/chrome-extension.md](docs/chrome-ext
 |   | Scout | Playwright MCP | Chrome Extension MCP | Selenium / scripts |
 | --- | --- | --- | --- | --- |
 | **Works on sites you don't control** | Yes | Limited — your own app | Limited — your active session | Blocked by detection |
-| **Page discovery** | Compact scout (~200 tokens) | Full screenshot (~124,000 tokens) | You provide selectors | You provide selectors |
+| **Context footprint** | Compact scout (~200 tokens per call) | Full screenshot (~124k tokens per call) | You provide selectors | You provide selectors |
 | **Credential safety** | Never in conversation | Plaintext in context | Plaintext in context | In your script |
 | **Anti-detection** | Built-in | None | None | None |
 | **2FA** | Built-in | No | No | You build it |
@@ -78,12 +78,16 @@ Full setup guide and troubleshooting: [docs/chrome-extension.md](docs/chrome-ext
 
 ## Benchmarks
 
-| Task | Scout tokens | Playwright MCP tokens | Reduction | Wall-clock | Success |
+| Task | Scout context | Playwright MCP context | Reduction | Wall-clock | Success |
 |------|-------------|----------------------|-----------|-----------|---------|
-| Fact lookup (Wikipedia) | ~1,264 | ~124,000 | **98% fewer** | 11.0s | 3/3 |
-| Form fill + verify (httpbin) | ~3,799 | ~124,000 | **97% fewer** | 25.2s | 3/3 |
+| Fact lookup (Wikipedia) | ~1,264 tokens | ~124,000 tokens | **98% fewer** | 15.8s | 3/3 |
+| Form fill + verify (httpbin) | ~3,799 tokens | ~124,000 tokens | **97% fewer** | 52.5s | 3/3 |
 
-<sup>Claude Sonnet 4.6, 3 runs each, wall-clock = browser time only (excludes model reasoning). Playwright MCP baseline is a single full-page screenshot. Full results: <a href="docs/benchmarks/benchmark-results-v0.2.md">v0.2</a></sup>
+<sup>Claude Opus 4.6, 3 runs each. Full results: <a href="docs/benchmarks/benchmark-results-v0.4.md">v0.4</a> | <a href="docs/benchmarks/benchmark-results-v0.2.md">v0.2</a> (Sonnet)</sup>
+
+**What these numbers measure:** Both columns show *context window footprint* — how many tokens the task adds to your conversation. Playwright MCP returns a full-page accessibility snapshot in a single tool call (~124k tokens). Scout spreads the work across multiple small calls (~200 tokens each), so an entire multi-step task consumes less context than one Playwright snapshot. Less context means more room for follow-up work in the same conversation and lower per-turn API costs, since every subsequent API call re-sends the full conversation.
+
+Wall-clock measures browser time only (`session_duration_seconds` from `close_session`). This excludes model reasoning between tool calls — add ~1–3 seconds per tool call for realistic end-to-end latency.
 
 ---
 
