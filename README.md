@@ -19,6 +19,12 @@ Scout reads the page structure, then acts — the same way you'd inspect a page 
 
 Most browser-automation tools for AI take full-page screenshots and have the model interpret pixels. A single Playwright MCP screenshot costs ~124,000 tokens and the model still has to guess at selectors from what it sees. Scout reads the DOM directly and returns a compact report (~200 tokens) with exact CSS selectors — 98% less than a screenshot.
 
+## See It In Action
+
+Real-world scenarios demonstrating Claude Code + Scout working together on live websites — checking docs, researching errors, filling forms, downloading files, and more.
+
+**[Scenario Catalog →](docs/scenario-catalog.md)**
+
 ## Credential Safety
 
 `fill_secret` reads credentials from `.env` server-side and types them directly into form fields. The AI client only sees `"chars_typed": 22` — never the actual value. Exported scripts use `${ENV_VAR}` references. Authorization and Cookie headers are scrubbed from network logs before they reach the conversation.

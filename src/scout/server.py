@@ -1150,11 +1150,12 @@ async def record_video(
     max_height: int = 1080,
     quality: int = 95,
     target_fps: int = 15,
+    output_format: Literal["mp4", "gif"] = "mp4",
     ctx: Context[ServerSession, AppContext] = None,
 ) -> dict:
     """Control video recording for the current browser session.
 
-    Records the browser screen using CDP screencast and encodes to MP4.
+    Records the browser screen using CDP screencast and encodes to MP4 or GIF.
     Requires ffmpeg for video encoding: install imageio-ffmpeg (pip install 'imageio-ffmpeg')
     or have ffmpeg on your system PATH. Without it, raw JPEG frames are saved instead.
 
@@ -1165,6 +1166,7 @@ async def record_video(
         max_height: Maximum video height in pixels. Default: 1080.
         quality: JPEG frame quality (1-100). Default: 95.
         target_fps: Target frames per second (approximate). Default: 15.
+        output_format: Output encoding format when stopping. "mp4" (default) or "gif". GIF uses palette-optimized encoding at 10fps/800px width for README-embeddable demos.
     """
     max_width = min(max(max_width, 320), 1920)
     max_height = min(max(max_height, 240), 1080)
@@ -1189,8 +1191,8 @@ async def record_video(
             ).model_dump(exclude_none=True)
 
         case "stop":
-            await ctx.info("Stopping recording and encoding video...")
-            result = await asyncio.to_thread(monitor.stop)
+            await ctx.info(f"Stopping recording and encoding {output_format.upper()}...")
+            result = await asyncio.to_thread(monitor.stop, output_format=output_format)
 
             # Record in session history
             from datetime import datetime, timezone
@@ -1200,6 +1202,8 @@ async def record_video(
                 duration_seconds=result["duration_seconds"],
                 frame_count=result["frame_count"],
                 video_path=result.get("video_path"),
+                gif_path=result.get("gif_path"),
+                output_format=output_format,
                 encoded=result["encoded"],
                 timestamp=datetime.now(timezone.utc).isoformat(),
             )
@@ -1208,16 +1212,19 @@ async def record_video(
             recording_result = RecordingResult(
                 recording_active=False,
                 video_path=result.get("video_path"),
+                gif_path=result.get("gif_path"),
                 frames_dir=result.get("frames_dir"),
                 frame_count=result["frame_count"],
                 duration_seconds=result["duration_seconds"],
                 encoded=result["encoded"],
+                output_format=output_format,
                 encode_warning=result.get("encode_warning"),
             )
 
+            output_path = result.get("video_path") or result.get("gif_path")
             if result["encoded"]:
                 await ctx.info(
-                    f"Video saved: {result['video_path']} "
+                    f"{output_format.upper()} saved: {output_path} "
                     f"({result['frame_count']} frames, {result['duration_seconds']}s)"
                 )
             else:
