@@ -13,6 +13,7 @@ import logging
 import os
 import platform
 import shutil
+import sqlite3
 import time
 from glob import glob
 from pathlib import Path
@@ -43,6 +44,7 @@ _ROOT_FILES = ["Local State"]
 # Lock sentinel files — never copy these.
 _LOCK_FILES = frozenset({
     "lockfile", "SingletonLock", "SingletonCookie", "SingletonSocket",
+    "LOCK",  # LevelDB lock sentinel
 })
 
 _CLONES_DIR_NAME = "_clones"
@@ -138,6 +140,33 @@ def _detect_active_profile(user_data_dir: str) -> str:
         return "Default"
 
 
+# --- Copy Helpers ---
+
+
+def _copy_with_sqlite_fallback(src: str, dst: str) -> None:
+    """Copy a file, falling back to SQLite backup for locked databases.
+
+    Chrome holds exclusive locks on some SQLite databases (e.g., Cookies)
+    while running. When shutil.copy2 fails with PermissionError, we attempt
+    a SQLite backup which handles database locking at the SQLite protocol
+    level. If both fail, the original PermissionError is re-raised.
+    """
+    try:
+        shutil.copy2(src, dst)
+    except PermissionError as original_err:
+        # Try SQLite backup — works for some locked databases
+        try:
+            src_conn = sqlite3.connect(src, timeout=1)
+            dst_conn = sqlite3.connect(dst)
+            src_conn.backup(dst_conn)
+            dst_conn.close()
+            src_conn.close()
+            logger.debug("Used SQLite backup for locked file: %s", src)
+        except (sqlite3.Error, OSError):
+            # Both methods failed — re-raise original PermissionError
+            raise original_err
+
+
 # --- Profile Cloning ---
 
 
@@ -206,11 +235,11 @@ def clone_profile(
                 continue
             dst_path = os.path.join(clone_profile_dir, basename)
             try:
-                shutil.copy2(src_path, dst_path)
+                _copy_with_sqlite_fallback(src_path, dst_path)
             except (PermissionError, OSError) as e:
                 warnings.append(f"Could not copy {basename}: {e}")
 
-    # 4. Copy subdirectories recursively
+    # 4. Copy subdirectories recursively (with SQLite fallback for locked DBs)
     for dirname in _PROFILE_DIRS:
         src_subdir = os.path.join(source_profile_dir, dirname)
         dst_subdir = os.path.join(clone_profile_dir, dirname)
@@ -221,6 +250,7 @@ def clone_profile(
                 src_subdir,
                 dst_subdir,
                 dirs_exist_ok=True,
+                copy_function=_copy_with_sqlite_fallback,
                 ignore=shutil.ignore_patterns(*_LOCK_FILES),
             )
         except (PermissionError, OSError) as e:
