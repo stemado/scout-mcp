@@ -1,4 +1,4 @@
-# scout-mcp-server
+# @stemado/scout-mcp
 
 MCP server for browser automation with anti-detection. Scout pages, find elements, interact with websites, and monitor network traffic — from any AI client that supports the [Model Context Protocol](https://modelcontextprotocol.io/).
 
@@ -7,7 +7,7 @@ Built on [botasaurus-driver](https://github.com/omkarcloud/botasaurus) for autom
 ## Quick Start
 
 ```bash
-npx -y scout-mcp-server
+npx -y @stemado/scout-mcp
 ```
 
 ## Configure Your AI Client
@@ -19,7 +19,7 @@ Add to your MCP server configuration:
   "mcpServers": {
     "scout": {
       "command": "npx",
-      "args": ["-y", "scout-mcp-server"]
+      "args": ["-y", "@stemado/scout-mcp"]
     }
   }
 }
