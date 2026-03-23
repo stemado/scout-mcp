@@ -22,6 +22,7 @@ from mcp.types import CallToolResult, ImageContent, TextContent
 from .actions import execute_action, inspect_element, run_javascript, take_screenshot
 from .models import (
     ActionRecord,
+    BrowseResult,
     ConnectionMode,
     DownloadEvent,
     ExtensionStatus,
@@ -35,6 +36,7 @@ from .models import (
     SessionHistory,
     SessionInfo,
 )
+from .browse import browse as browse_page
 from .sanitize import sanitize_response
 from .scout import build_element_summary, filter_elements, scout_page
 from .security import (
@@ -1569,6 +1571,31 @@ async def allow_navigation(
         "permitted_url": url,
         "message": f"Navigation to '{url}' has been permitted. Retry the navigation.",
     }
+
+
+# --- Tool: browse ---
+
+
+@mcp.tool()
+async def browse(
+    url: str,
+    query: str | None = None,
+    max_length: int | None = None,
+    ctx: Context | None = None,
+) -> str:
+    """Fetch a web page and extract its content as clean markdown.
+
+    Lightweight alternative to the full Scout session flow. One tool call,
+    content out. Uses HTTP by default with automatic stealth browser fallback
+    for bot-protected pages.
+
+    Args:
+        url: The page URL to fetch.
+        query: Optional — extract only content relevant to this query.
+        max_length: Optional — cap response length in characters. 0 = unlimited.
+    """
+    result = await browse_page(url, query=query, max_length=max_length)
+    return sanitize_response(result.model_dump())
 
 
 # --- Entry Point ---
