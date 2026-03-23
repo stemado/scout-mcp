@@ -177,13 +177,15 @@ class TestSSRFRequestHook:
     """Layer A: Event hook validates every URL including redirect targets."""
 
     @pytest.mark.asyncio
-    async def test_blocks_metadata_ip(self):
+    async def test_blocks_metadata_ip(self, monkeypatch):
+        monkeypatch.delenv("SCOUT_ALLOW_LOCALHOST", raising=False)
         request = httpx.Request("GET", "http://169.254.169.254/latest/meta-data/")
         with pytest.raises(ValueError, match="Blocked URL host"):
             await _ssrf_request_hook(request)
 
     @pytest.mark.asyncio
-    async def test_blocks_localhost(self):
+    async def test_blocks_localhost(self, monkeypatch):
+        monkeypatch.delenv("SCOUT_ALLOW_LOCALHOST", raising=False)
         request = httpx.Request("GET", "http://127.0.0.1:9222/json")
         with pytest.raises(ValueError, match="Blocked URL host"):
             await _ssrf_request_hook(request)
@@ -199,7 +201,7 @@ class TestCheckResolvedIP:
 
     def test_blocks_loopback(self):
         with pytest.raises(ValueError, match="loopback"):
-            _check_resolved_ip(ipaddress.ip_address("127.0.0.1"))
+            _check_resolved_ip(ipaddress.ip_address("127.0.0.1"), allow_localhost=False)
 
     def test_blocks_link_local(self):
         with pytest.raises(ValueError, match="link-local"):
@@ -211,14 +213,20 @@ class TestCheckResolvedIP:
 
     def test_blocks_private(self):
         with pytest.raises(ValueError, match="private"):
-            _check_resolved_ip(ipaddress.ip_address("10.0.0.1"))
+            _check_resolved_ip(ipaddress.ip_address("10.0.0.1"), allow_localhost=False)
 
     def test_blocks_ipv6_mapped_loopback(self):
         with pytest.raises(ValueError, match="loopback"):
-            _check_resolved_ip(ipaddress.ip_address("::ffff:127.0.0.1"))
+            _check_resolved_ip(ipaddress.ip_address("::ffff:127.0.0.1"), allow_localhost=False)
 
     def test_allows_public_ip(self):
         _check_resolved_ip(ipaddress.ip_address("93.184.216.34"))  # example.com
+
+    def test_allows_loopback_when_permitted(self):
+        _check_resolved_ip(ipaddress.ip_address("127.0.0.1"), allow_localhost=True)
+
+    def test_allows_private_when_permitted(self):
+        _check_resolved_ip(ipaddress.ip_address("10.0.0.1"), allow_localhost=True)
 
 
 class TestHTTPFetch:
@@ -291,9 +299,17 @@ _BLOCKED_METADATA_IPS = frozenset({
     "100.100.100.200",
 })
 
-# Browser fallback concurrency limit.
-_browser_semaphore = asyncio.Semaphore(2)
+# Browser fallback concurrency limit — lazy-init to avoid binding to
+# the wrong event loop when the module is imported before asyncio starts.
+_browser_semaphore: asyncio.Semaphore | None = None
 _BROWSER_FALLBACK_TIMEOUT = 30
+
+
+def _get_browser_semaphore() -> asyncio.Semaphore:
+    global _browser_semaphore
+    if _browser_semaphore is None:
+        _browser_semaphore = asyncio.Semaphore(2)
+    return _browser_semaphore
 
 
 # --- SSRF Defense Layer A: Request event hook ---
@@ -387,7 +403,7 @@ async def http_fetch(
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_browse.py -v -k "SSRF or CheckResolved or HTTPFetch"`
-Expected: PASS (all 8 tests)
+Expected: PASS (all 10 tests)
 
 - [ ] **Step 5: Commit**
 
@@ -432,9 +448,17 @@ class TestBotDetection:
         html = b"<html><body>Not found</body></html>"
         assert _is_bot_blocked(404, {}, html) is False
 
-    def test_detects_captcha_marker(self):
-        html = b'<html><body><div id="captcha-container">Please verify</div></body></html>'
+    def test_detects_captcha_marker_with_form(self):
+        html = b'<html><body><form><div id="captcha-container">Please verify</div></form></body></html>'
         assert _is_bot_blocked(200, {}, html) is True
+
+    def test_ignores_captcha_in_article_text(self):
+        html = b'<html><body><p>This article discusses how CAPTCHA technology works.</p></body></html>'
+        assert _is_bot_blocked(200, {}, html) is False
+
+    def test_detects_captcha_with_403(self):
+        html = b'<html><body><div>Please complete the captcha to continue</div></body></html>'
+        assert _is_bot_blocked(403, {}, html) is True
 ```
 
 - [ ] **Step 2: Run to verify failure**
@@ -469,10 +493,19 @@ def _is_bot_blocked(status: int, headers: dict[str, str], body: bytes) -> bool:
             if header in headers:
                 return True
 
-    # CAPTCHA markers in body
-    for marker in _CAPTCHA_MARKERS:
-        if marker in body_lower:
-            return True
+    # CAPTCHA markers in body — only flag with suspicious status codes
+    # to avoid false positives on pages that merely discuss CAPTCHAs
+    if status in (403, 429, 503, 200):
+        # For 200, require CAPTCHA marker in a form/challenge context, not just body text
+        if status != 200:
+            for marker in _CAPTCHA_MARKERS:
+                if marker in body_lower:
+                    return True
+        else:
+            # For 200: only trigger if CAPTCHA marker appears near form/challenge elements
+            for marker in _CAPTCHA_MARKERS:
+                if marker in body_lower and (b"<form" in body_lower or b"challenge" in body_lower):
+                    return True
 
     # JS-redirect-only page: small body dominated by <script> tags
     if len(body) < 2000:
@@ -497,7 +530,7 @@ async def _browser_fetch(url: str) -> tuple[str, str]:
     """
     from botasaurus_driver import Driver
 
-    async with _browser_semaphore:
+    async with _get_browser_semaphore():
         def _fetch_sync() -> tuple[str, str]:
             driver = Driver(headless=True)
             try:
@@ -520,7 +553,7 @@ async def _browser_fetch(url: str) -> tuple[str, str]:
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_browse.py::TestBotDetection -v`
-Expected: PASS (6 tests)
+Expected: PASS (8 tests)
 
 - [ ] **Step 5: Commit**
 
@@ -572,32 +605,37 @@ from scout.browse import extract_content, truncate_at_paragraph
 
 
 class TestExtractContent:
-    def test_extracts_main_content(self):
+    @pytest.mark.asyncio
+    async def test_extracts_main_content(self):
         html = """<html><head><title>Test</title></head>
         <body><nav>Menu</nav><main><h1>Title</h1><p>Real content here.</p></main>
         <footer>Copyright</footer></body></html>"""
-        title, content = extract_content(html)
+        title, content = await extract_content(html)
         assert "Real content" in content
         assert title == "Test"
 
-    def test_returns_empty_on_blank_html(self):
-        title, content = extract_content("<html><body></body></html>")
+    @pytest.mark.asyncio
+    async def test_returns_empty_on_blank_html(self):
+        title, content = await extract_content("<html><body></body></html>")
         assert content == ""
 
-    def test_skips_nav_and_footer(self):
+    @pytest.mark.asyncio
+    async def test_skips_nav_and_footer(self):
         html = """<html><head><title>T</title></head><body>
         <nav>Navigation</nav><p>Article text</p><footer>Footer</footer></body></html>"""
-        title, content = extract_content(html)
+        title, content = await extract_content(html)
         assert "Navigation" not in content or "Article" in content
 
-    def test_json_passthrough(self):
+    @pytest.mark.asyncio
+    async def test_json_passthrough(self):
         """JSON should be pretty-printed, not run through trafilatura."""
-        title, content = extract_content('{"key": "value"}', content_type="application/json")
+        title, content = await extract_content('{"key": "value"}', content_type="application/json")
         assert '"key"' in content
         assert '"value"' in content
 
-    def test_plain_text_passthrough(self):
-        title, content = extract_content("Just plain text.", content_type="text/plain")
+    @pytest.mark.asyncio
+    async def test_plain_text_passthrough(self):
+        title, content = await extract_content("Just plain text.", content_type="text/plain")
         assert content == "Just plain text."
 
 
@@ -640,12 +678,13 @@ import trafilatura
 # --- Content extraction ---
 
 
-def extract_content(
+async def extract_content(
     raw: str, *, content_type: str = "text/html"
 ) -> tuple[str, str]:
     """Extract clean content from raw response. Returns (title, markdown_content).
 
     Handles HTML (via trafilatura), JSON (pretty-print), and plain text (passthrough).
+    trafilatura is sync and can be slow on large pages, so it runs in a thread.
     """
     ct = content_type.lower().split(";")[0].strip()
 
@@ -659,8 +698,9 @@ def extract_content(
     if ct == "text/plain":
         return "", raw
 
-    # HTML extraction via trafilatura
-    result = trafilatura.extract(
+    # HTML extraction via trafilatura — run in thread to avoid blocking the event loop
+    result = await asyncio.to_thread(
+        trafilatura.extract,
         raw,
         include_links=True,
         include_tables=True,
@@ -1158,7 +1198,7 @@ async def browse(
         # Layer 0: Content-type detection for non-HTML
         ct_base = content_type.lower().split(";")[0].strip()
         if ct_base in ("application/json", "text/plain"):
-            title, content = extract_content(
+            title, content = await extract_content(
                 body.decode(errors="replace"), content_type=ct_base
             )
             return BrowseResult(
@@ -1201,7 +1241,7 @@ async def browse(
         return BrowseResult(success=False, url=url, error=f"HTTP error: {e}")
 
     # Layer 3: Content extraction
-    title, content = extract_content(html)
+    title, content = await extract_content(html)
     if not content:
         return BrowseResult(
             success=True,
@@ -1336,6 +1376,11 @@ git commit -m "feat(browse): register browse tool in MCP server"
 In `tests/conftest.py`, add these handlers to `_TestHandler.do_GET()`:
 
 ```python
+        elif self.path == "/redirect-to-metadata":
+            self.send_response(302)
+            self.send_header("Location", "http://169.254.169.254/latest/meta-data/")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
         elif self.path == "/bot-block":
             body = b"<html><head><title>Just a moment...</title></head><body><script>challenge()</script></body></html>"
             self.send_response(403)
@@ -1375,8 +1420,18 @@ class TestBrowseIntegration:
         assert result.fetch_method == "browser" or result.success is False
 
     @pytest.mark.asyncio
-    async def test_nonexistent_url(self):
-        result = await browse("http://this-domain-does-not-exist-12345.com")
+    async def test_ssrf_redirect_chain_blocked(self, base_url):
+        """The exact attack vector: safe URL redirects to metadata IP.
+        SSRF event hook must catch the redirect target before fetching it."""
+        result = await browse(f"{base_url}/redirect-to-metadata")
+        assert result.success is False
+        assert "Blocked" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_unreachable_host(self):
+        # RFC 5737 TEST-NET-1: guaranteed unreachable, unlike NXDOMAIN which
+        # some ISPs hijack to a search page
+        result = await browse("http://192.0.2.1/")
         assert result.success is False
         assert result.error is not None
 ```
