@@ -13,6 +13,7 @@ from scout.browse import (
     SSRFSafeTransport,
     _check_resolved_ip,
     http_fetch,
+    _is_bot_blocked,
 )
 
 
@@ -88,3 +89,36 @@ class TestHTTPFetch:
         assert status == 200
         assert b'"key"' in body
         assert "127.0.0.1" in final_url
+
+
+class TestBotDetection:
+    def test_detects_cloudflare_challenge(self):
+        html = b"<html><head><title>Just a moment...</title></head><body></body></html>"
+        assert _is_bot_blocked(403, {}, html) is True
+
+    def test_detects_empty_body_with_scripts(self):
+        html = b'<html><body><script src="challenge.js"></script><script src="verify.js"></script></body></html>'
+        assert _is_bot_blocked(200, {}, html) is True
+
+    def test_detects_cf_ray_header_with_403(self):
+        assert _is_bot_blocked(403, {"cf-ray": "abc123"}, b"Access denied") is True
+
+    def test_allows_normal_html(self):
+        html = b"<html><head><title>Real Page</title></head><body><p>Content here</p></body></html>"
+        assert _is_bot_blocked(200, {}, html) is False
+
+    def test_allows_normal_404(self):
+        html = b"<html><body>Not found</body></html>"
+        assert _is_bot_blocked(404, {}, html) is False
+
+    def test_detects_captcha_marker_with_form(self):
+        html = b'<html><body><form><div id="captcha-container">Please verify</div></form></body></html>'
+        assert _is_bot_blocked(200, {}, html) is True
+
+    def test_ignores_captcha_in_article_text(self):
+        html = b'<html><body><p>This article discusses how CAPTCHA technology works.</p></body></html>'
+        assert _is_bot_blocked(200, {}, html) is False
+
+    def test_detects_captcha_with_403(self):
+        html = b'<html><body><div>Please complete the captcha to continue</div></body></html>'
+        assert _is_bot_blocked(403, {}, html) is True

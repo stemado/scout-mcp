@@ -148,3 +148,82 @@ async def http_fetch(
         response = await client.get(url)
         headers = {k.lower(): v for k, v in response.headers.items()}
         return response.status_code, headers, response.content, str(response.url)
+
+
+# --- Bot detection heuristics ---
+
+_CF_CHALLENGE_TITLES = {b"just a moment", b"attention required", b"please wait"}
+_CAPTCHA_MARKERS = {b"captcha", b"recaptcha", b"hcaptcha", b"cf-turnstile"}
+_CHALLENGE_HEADERS = {"cf-ray", "x-amzn-captcha", "x-sucuri-id"}
+
+
+def _is_bot_blocked(status: int, headers: dict[str, str], body: bytes) -> bool:
+    """Detect if an HTTP response is a bot challenge rather than real content."""
+    body_lower = body.lower()
+
+    # Cloudflare / Akamai challenge title
+    for title in _CF_CHALLENGE_TITLES:
+        if b"<title>" + title in body_lower:
+            return True
+
+    # Challenge headers with blocked status
+    if status in (403, 429):
+        for header in _CHALLENGE_HEADERS:
+            if header in headers:
+                return True
+
+    # CAPTCHA markers in body — only flag with suspicious status codes
+    # to avoid false positives on pages that merely discuss CAPTCHAs
+    if status in (403, 429, 503, 200):
+        # For non-200, any CAPTCHA marker is suspicious
+        if status != 200:
+            for marker in _CAPTCHA_MARKERS:
+                if marker in body_lower:
+                    return True
+        else:
+            # For 200: only trigger if CAPTCHA marker appears near form/challenge elements
+            for marker in _CAPTCHA_MARKERS:
+                if marker in body_lower and (b"<form" in body_lower or b"challenge" in body_lower):
+                    return True
+
+    # JS-redirect-only page: small body dominated by <script> tags
+    if len(body) < 2000:
+        script_count = body_lower.count(b"<script")
+        text_without_tags = body_lower
+        for tag in [b"<script", b"</script>", b"<html", b"</html>", b"<head", b"</head>", b"<body", b"</body>", b"<meta", b"<link"]:
+            text_without_tags = text_without_tags.replace(tag, b"")
+        stripped = text_without_tags.strip()
+        if script_count >= 2 and len(stripped) < 100:
+            return True
+
+    return False
+
+
+# --- Browser fallback ---
+
+
+async def _browser_fetch(url: str) -> tuple[str, str]:
+    """Fetch a page using a transient botasaurus browser. Returns (html, final_url).
+
+    Uses a semaphore to limit concurrent browser instances to 2.
+    """
+    from botasaurus_driver import Driver
+
+    async with _get_browser_semaphore():
+        def _fetch_sync() -> tuple[str, str]:
+            driver = Driver(headless=True)
+            try:
+                driver.get(url, wait=_BROWSER_FALLBACK_TIMEOUT)
+                html = driver.page_html
+                final_url = driver.current_url
+                return html, final_url
+            finally:
+                try:
+                    driver.close()
+                except Exception:
+                    pass
+
+        return await asyncio.wait_for(
+            asyncio.to_thread(_fetch_sync),
+            timeout=_BROWSER_FALLBACK_TIMEOUT + 5,  # grace period beyond page wait
+        )
