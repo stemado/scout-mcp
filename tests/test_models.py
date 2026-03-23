@@ -2,6 +2,7 @@
 
 from scout.models import (
     ActionResult,
+    BrowseResult,
     ElementInspection,
     ElementSummary,
     FindElementsResult,
@@ -361,3 +362,43 @@ def test_session_history_defaults():
     assert history.javascript_calls == []
     assert history.screenshots == []
     assert history.actions == []
+
+
+# --- BrowseResult ---
+
+
+class TestBrowseResult:
+    def test_success_case(self):
+        result = BrowseResult(
+            success=True,
+            url="https://example.com",
+            title="Example",
+            content="# Hello\n\nWorld",
+            extraction_mode="full",
+            fetch_method="http",
+        )
+        assert result.success is True
+        assert result.url == "https://example.com"
+        assert result.error is None
+
+    def test_error_case_minimal(self):
+        result = BrowseResult(success=False, error="Connection refused")
+        assert result.success is False
+        assert result.url == ""
+        assert result.title == ""
+        assert result.content == ""
+        assert result.extraction_mode == "full"
+        assert result.fetch_method == "http"
+        assert result.error == "Connection refused"
+
+    def test_extraction_mode_extracted(self):
+        result = BrowseResult(
+            success=True,
+            url="https://example.com",
+            title="Example",
+            content="Relevant passage",
+            extraction_mode="extracted",
+            fetch_method="browser",
+        )
+        assert result.extraction_mode == "extracted"
+        assert result.fetch_method == "browser"

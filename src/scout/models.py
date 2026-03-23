@@ -337,3 +337,15 @@ class FillSecretResult(BaseModel):
     error: str | None = Field(default=None)
     warning: str | None = Field(default=None, description="Scrubbing limitation warning for short credentials")
     elapsed_ms: int = Field(default=0)
+
+
+class BrowseResult(BaseModel):
+    """Result from the browse tool — lightweight page fetch and content extraction."""
+
+    success: bool
+    url: str = Field(default="", description="Final URL after redirects")
+    title: str = Field(default="", description="Page title")
+    content: str = Field(default="", description="Clean markdown content (full or extracted)")
+    extraction_mode: str = Field(default="full", description="'full' or 'extracted'")
+    fetch_method: str = Field(default="http", description="'http' or 'browser'")
+    error: str | None = Field(default=None, description="Error message if success is False")
