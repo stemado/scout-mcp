@@ -17,6 +17,8 @@ from typing import Any
 import httpx
 import trafilatura
 
+from .models import BrowseResult
+from .providers import ProviderError, extract_with_llm, parse_model_config
 from .validation import validate_url
 
 # --- Configuration ---
@@ -278,6 +280,103 @@ def keyword_extract(text: str, *, query: str, max_passages: int = 5) -> str:
     scored.sort(key=lambda x: x[1], reverse=True)
     top_indices = sorted([idx for idx, _ in scored[:max_passages]])
     return "\n\n".join(paragraphs[i] for i in top_indices)
+
+
+# --- Main browse pipeline ---
+
+
+async def browse(
+    url: str,
+    query: str | None = None,
+    max_length: int | None = None,
+) -> BrowseResult:
+    """Fetch a URL, extract clean content, optionally filter by query."""
+    # Validate URL upfront
+    try:
+        validate_url(url, allow_localhost=_allow_localhost())
+    except ValueError as e:
+        return BrowseResult(success=False, url=url, error=str(e))
+
+    effective_max = max_length if max_length is not None else _get_browse_max_length()
+
+    fetch_method = "http"
+    html: str = ""
+    final_url = url
+    content_type = "text/html"
+
+    # Layer 1: HTTP fast path
+    try:
+        status, headers, body, final_url = await http_fetch(url)
+        content_type = headers.get("content-type", "text/html")
+
+        # Layer 0: Content-type detection for non-HTML
+        ct_base = content_type.lower().split(";")[0].strip()
+        if ct_base in ("application/json", "text/plain"):
+            title, content = await extract_content(
+                body.decode(errors="replace"), content_type=ct_base
+            )
+            return BrowseResult(
+                success=True, url=final_url, title=title,
+                content=truncate_at_paragraph(content, max_length=effective_max),
+                extraction_mode="full", fetch_method="http",
+            )
+
+        if ct_base not in ("text/html", "application/xhtml+xml", ""):
+            return BrowseResult(
+                success=False, url=final_url,
+                error=f"Unsupported content type: {ct_base}",
+            )
+
+        html = body.decode(errors="replace")
+
+        # Layer 2: Bot detection → browser fallback
+        if _is_bot_blocked(status, headers, body):
+            try:
+                html, final_url = await _browser_fetch(url)
+                fetch_method = "browser"
+            except Exception as e:
+                return BrowseResult(
+                    success=False, url=url,
+                    error=f"Browser fallback failed: {e}",
+                    fetch_method="browser",
+                )
+
+    except ValueError as e:
+        return BrowseResult(success=False, url=url, error=str(e))
+    except httpx.TimeoutException:
+        return BrowseResult(success=False, url=url, error="HTTP request timed out")
+    except httpx.HTTPError as e:
+        return BrowseResult(success=False, url=url, error=f"HTTP error: {e}")
+
+    # Layer 3: Content extraction
+    title, content = await extract_content(html)
+    if not content:
+        return BrowseResult(
+            success=True, url=final_url, title=title, content="",
+            extraction_mode="full", fetch_method=fetch_method,
+        )
+
+    # Layer 4: Query extraction (optional)
+    extraction_mode = "full"
+    if query:
+        extraction_mode = "extracted"
+        model_config = os.environ.get("SCOUT_BROWSE_MODEL")
+        if model_config:
+            try:
+                provider, model = parse_model_config(model_config)
+                content = await extract_with_llm(content, query, provider, model)
+            except (ProviderError, ValueError):
+                content = keyword_extract(content, query=query)
+        else:
+            content = keyword_extract(content, query=query)
+
+    # Truncation (final step)
+    content = truncate_at_paragraph(content, max_length=effective_max)
+
+    return BrowseResult(
+        success=True, url=final_url, title=title, content=content,
+        extraction_mode=extraction_mode, fetch_method=fetch_method,
+    )
 
 
 # --- Content extraction ---

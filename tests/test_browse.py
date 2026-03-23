@@ -215,3 +215,60 @@ class TestTruncation:
         text = "This is a long sentence that should not be cut in half."
         result = truncate_at_paragraph(text, max_length=20)
         assert result == text
+
+
+from scout.browse import browse
+from scout.models import BrowseResult
+
+
+class TestBrowsePipeline:
+    @pytest.mark.asyncio
+    async def test_fetches_html_and_extracts(self, base_url):
+        result = await browse(f"{base_url}/article.html")
+        assert isinstance(result, BrowseResult)
+        assert result.success is True
+        assert result.fetch_method == "http"
+        assert result.extraction_mode == "full"
+        assert "Supreme Court" in result.content or "Opinions" in result.content
+        assert result.title == "Supreme Court Opinions"
+
+    @pytest.mark.asyncio
+    async def test_fetches_json_passthrough(self, base_url):
+        result = await browse(f"{base_url}/api/data")
+        assert result.success is True
+        assert '"key"' in result.content
+
+    @pytest.mark.asyncio
+    async def test_query_extraction(self, base_url):
+        result = await browse(f"{base_url}/article.html", query="Trump v. Anderson")
+        assert result.success is True
+        assert result.extraction_mode == "extracted"
+        assert "Trump" in result.content
+
+    @pytest.mark.asyncio
+    async def test_ssrf_blocked(self):
+        result = await browse("http://169.254.169.254/latest/meta-data/")
+        assert result.success is False
+        assert "Blocked" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_max_length_truncation(self, base_url):
+        full = await browse(f"{base_url}/article.html")
+        truncated = await browse(f"{base_url}/article.html", max_length=50)
+        assert truncated.success is True
+        # Truncated content should be no longer than full content
+        assert len(truncated.content) <= len(full.content)
+
+    @pytest.mark.asyncio
+    async def test_max_length_zero_disables(self, base_url):
+        result = await browse(f"{base_url}/article.html", max_length=0)
+        assert result.success is True
+
+    @pytest.mark.asyncio
+    async def test_bot_block_triggers_browser_fallback(self, base_url):
+        fake_html = "<html><head><title>Real Page</title></head><body><p>Browser content</p></body></html>"
+        with patch("scout.browse._is_bot_blocked", return_value=True), \
+             patch("scout.browse._browser_fetch", new_callable=AsyncMock, return_value=(fake_html, "https://example.com")):
+            result = await browse(f"{base_url}/article.html")
+            assert result.success is True
+            assert result.fetch_method == "browser"
