@@ -37,13 +37,20 @@ async def browse(
 
 ```python
 class BrowseResult(BaseModel):
-    success: bool       # Whether the fetch and extraction succeeded
-    url: str            # Final URL (after redirects)
-    title: str          # Page title
-    content: str        # Clean markdown (full or extracted)
-    extraction_mode: str  # "full" or "extracted"
-    fetch_method: str   # "http" or "browser"
-    error: str | None = None  # Error message if success is False
+    success: bool                          # Whether the fetch and extraction succeeded
+    url: str = ""                          # Final URL (after redirects)
+    title: str = ""                        # Page title
+    content: str = ""                      # Clean markdown (full or extracted)
+    extraction_mode: str = "full"          # "full" or "extracted"
+    fetch_method: str = "http"             # "http" or "browser"
+    error: str | None = None               # Error message if success is False
+```
+
+All fields except `success` have defaults so that error responses can be constructed cleanly:
+```python
+# Error case:
+BrowseResult(success=False, error="SSRF: blocked redirect to metadata IP")
+# Happy case — all fields populated explicitly
 ```
 
 ### Example Call
@@ -73,9 +80,27 @@ Before fetching, and after receiving the response:
 ### Layer 1 — HTTP Fast Path
 
 - `httpx` async GET with browser-like headers (User-Agent, Accept, Accept-Language)
-- Follow redirects (httpx default limit of 20)
-- SSRF protection via Scout's existing `validation.py` URL checks (IPv6 normalization, localhost blocking)
-- **SSRF validation is applied to the final URL after redirect resolution**, not just the initial URL — a redirect chain could bounce to internal IPs
+- Follow redirects enabled (`follow_redirects=True`), safe because of two-layer SSRF defense:
+
+**SSRF Defense Layer A — Request event hook (redirect chain protection):**
+- An httpx `event_hooks={"request": [ssrf_guard]}` hook runs `validate_url()` on *every* request, including each redirect hop, *before* the request is sent
+- If any redirect target fails validation (metadata IP, loopback, link-local), the hook raises and aborts before the request reaches the network
+- Reuses Scout's existing `validation.py` logic
+
+**SSRF Defense Layer B — Custom transport (DNS rebinding protection):**
+- A custom `httpx.AsyncBaseTransport` wrapping `AsyncHTTPTransport` resolves DNS and validates all resolved IPs *before* opening the TCP connection
+- Blocks connections where DNS resolves to: loopback, link-local, private ranges, or known metadata IPs (`169.254.169.254`, `100.100.100.200`)
+- Handles IPv6-mapped IPv4 normalization (consistent with existing `_is_blocked_host()`)
+- This prevents DNS rebinding attacks where a hostname looks safe but resolves to a blocked IP
+
+```python
+# Conceptual usage:
+client = httpx.AsyncClient(
+    transport=SSRFSafeTransport(),
+    follow_redirects=True,
+    event_hooks={"request": [ssrf_request_hook]},
+)
+```
 
 ### Layer 2 — Stealth Browser Fallback
 
@@ -96,7 +121,7 @@ When triggered:
 - **Concurrency limit**: max 2 simultaneous browser fallbacks (async semaphore) to prevent Chrome process storms
 - Navigates to URL, waits for JS rendering, captures fully-rendered DOM
 - Tears down the browser immediately after
-- **Never touches an active Scout session** — this is a completely separate Chrome instance
+- **Never touches an active Scout session** — this is a completely separate Chrome instance. Verified: botasaurus-driver allocates a random free port (50000-55000) and separate temp profile per `Driver()` instance — no singletons, no shared state. Concurrent instances are safe.
 - If the browser fallback also fails (e.g., hard CAPTCHA), return error with `success=False` — do not retry
 
 ### Layer 3 — Content Extraction (always runs)
@@ -104,8 +129,7 @@ When triggered:
 - `trafilatura` extracts main content from raw HTML
 - Strips navigation, footers, ads, scripts, sidebars, cookie banners
 - Converts to clean markdown preserving document structure (headings, lists, links, tables)
-- If `max_length` is `None`, uses `SCOUT_BROWSE_MAX_LENGTH` (default 5000 chars). Pass `max_length=0` to disable truncation.
-- Truncation happens at paragraph boundaries (never mid-sentence)
+- **No truncation at this stage** — full clean content is passed to Layer 4 (if query is provided) so that relevance scoring sees the entire document. Truncation happens *after* extraction.
 
 ### Layer 4 — Query Extraction (only when `query` is provided)
 
@@ -121,6 +145,14 @@ Two modes:
 - LLM returns only the content that answers the query
 - On LLM failure (timeout, rate limit, error), falls back to keyword scoring with a warning in the response
 - Generic provider interface supporting multiple backends
+
+### Truncation (applies to both Layer 3 and Layer 4 output)
+
+Truncation is the **final step**, applied after extraction (if any):
+
+- If `max_length` is `None`, uses `SCOUT_BROWSE_MAX_LENGTH` (default 5000 chars). Pass `max_length=0` to disable truncation.
+- Truncation happens at paragraph boundaries (never mid-sentence)
+- This ordering ensures query extraction in Layer 4 sees the *full* document — a relevant passage at the bottom of a long page won't be lost to premature truncation
 
 ### Provider Interface (`providers.py`)
 
@@ -220,7 +252,7 @@ This works because MCP tool calls are stateless and independent. A Scout session
 
 ## Security
 
-- All `browse()` output passes through Scout's `sanitize_response()` pipeline before returning to the AI client, consistent with every other Scout tool. Registered secret values are scrubbed.
+- All `browse()` output passes through Scout's `sanitize_response()` pipeline before returning to the AI client, consistent with every other Scout tool. Since `browse()` is session-independent, it passes `secrets=None` — there are no registered secrets to scrub. (If a Scout session is active, its secrets are isolated to that session's tools. `browse()` does not cross that boundary.) Content boundary markers and invisible character stripping still apply.
 - SSRF validation on both initial URL and final URL after redirect resolution
 - Browser fallback concurrency limited to prevent resource exhaustion
 
