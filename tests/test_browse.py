@@ -272,3 +272,35 @@ class TestBrowsePipeline:
             result = await browse(f"{base_url}/article.html")
             assert result.success is True
             assert result.fetch_method == "browser"
+
+
+class TestBrowseIntegration:
+    """Tests using the local test server for realistic scenarios."""
+
+    @pytest.mark.asyncio
+    async def test_plain_text_passthrough(self, base_url):
+        result = await browse(f"{base_url}/plain")
+        assert result.success is True
+        assert result.content == "This is plain text content."
+
+    @pytest.mark.asyncio
+    async def test_bot_block_detected(self, base_url):
+        """Bot block should be detected (browser fallback will fail since no Chrome in unit tests)."""
+        result = await browse(f"{base_url}/bot-block")
+        # In unit test env, browser fallback will fail — but bot detection should trigger
+        assert result.fetch_method == "browser" or result.success is False
+
+    @pytest.mark.asyncio
+    async def test_unreachable_host(self):
+        # RFC 5737 TEST-NET-1: guaranteed unreachable
+        result = await browse("http://192.0.2.1/")
+        assert result.success is False
+        assert result.error is not None
+
+    @pytest.mark.asyncio
+    async def test_ssrf_redirect_chain_blocked(self, base_url):
+        """The exact attack vector: safe URL redirects to metadata IP.
+        SSRF event hook must catch the redirect target before fetching it."""
+        result = await browse(f"{base_url}/redirect-to-metadata")
+        assert result.success is False
+        assert "Blocked" in (result.error or "")

@@ -35,6 +35,26 @@ class _TestHandler(SimpleHTTPRequestHandler):
         elif self.path == "/slow":
             time.sleep(2)
             self._json_response({"slow": True})
+        elif self.path == "/redirect-to-metadata":
+            self.send_response(302)
+            self.send_header("Location", "http://169.254.169.254/latest/meta-data/")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+        elif self.path == "/bot-block":
+            body = b"<html><head><title>Just a moment...</title></head><body><script>challenge()</script></body></html>"
+            self.send_response(403)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("cf-ray", "fake-ray-id")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        elif self.path == "/plain":
+            body = b"This is plain text content."
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
         else:
             super().do_GET()
 
