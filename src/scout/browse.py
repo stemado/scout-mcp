@@ -7,11 +7,15 @@ from __future__ import annotations
 
 import asyncio
 import ipaddress
+import json as _json
+import math
 import os
+import re as _re
 import socket
 from typing import Any
 
 import httpx
+import trafilatura
 
 from .validation import validate_url
 
@@ -227,3 +231,117 @@ async def _browser_fetch(url: str) -> tuple[str, str]:
             asyncio.to_thread(_fetch_sync),
             timeout=_BROWSER_FALLBACK_TIMEOUT + 5,  # grace period beyond page wait
         )
+
+
+# --- BM25-style keyword extraction ---
+
+
+def keyword_extract(text: str, *, query: str, max_passages: int = 5) -> str:
+    """Extract the most relevant paragraphs using BM25-style scoring.
+
+    Returns passages in their original document order.
+    """
+    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+    if not paragraphs:
+        return ""
+
+    query_terms = _re.findall(r"\w+", query.lower())
+    if not query_terms:
+        return text
+
+    # BM25 parameters
+    k1 = 1.5
+    b = 0.75
+    avg_dl = sum(len(p.split()) for p in paragraphs) / len(paragraphs)
+
+    df: dict[str, int] = {}
+    for term in query_terms:
+        df[term] = sum(1 for p in paragraphs if term in p.lower())
+
+    scored: list[tuple[int, float]] = []
+    for i, para in enumerate(paragraphs):
+        words = para.lower().split()
+        dl = len(words)
+        score = 0.0
+        for term in query_terms:
+            tf = words.count(term)
+            idf = math.log(
+                (len(paragraphs) - df.get(term, 0) + 0.5)
+                / (df.get(term, 0) + 0.5)
+                + 1
+            )
+            numerator = tf * (k1 + 1)
+            denominator = tf + k1 * (1 - b + b * dl / avg_dl)
+            score += idf * numerator / denominator
+        scored.append((i, score))
+
+    scored.sort(key=lambda x: x[1], reverse=True)
+    top_indices = sorted([idx for idx, _ in scored[:max_passages]])
+    return "\n\n".join(paragraphs[i] for i in top_indices)
+
+
+# --- Content extraction ---
+
+
+async def extract_content(
+    raw: str, *, content_type: str = "text/html"
+) -> tuple[str, str]:
+    """Extract clean content from raw response. Returns (title, markdown_content).
+
+    Handles HTML (via trafilatura), JSON (pretty-print), and plain text (passthrough).
+    trafilatura is sync and can be slow on large pages, so it runs in a thread.
+    """
+    ct = content_type.lower().split(";")[0].strip()
+
+    if ct == "application/json":
+        try:
+            parsed = _json.loads(raw)
+            return "", _json.dumps(parsed, indent=2)
+        except _json.JSONDecodeError:
+            return "", raw
+
+    if ct == "text/plain":
+        return "", raw
+
+    # HTML extraction via trafilatura — run in thread to avoid blocking the event loop
+    result = await asyncio.to_thread(
+        trafilatura.extract,
+        raw,
+        include_links=True,
+        include_tables=True,
+        output_format="txt",
+        favor_recall=True,
+    )
+
+    # Extract title from HTML
+    title = ""
+    raw_lower = raw.lower() if isinstance(raw, str) else raw.decode(errors="replace").lower()
+    start = raw_lower.find("<title>")
+    end = raw_lower.find("</title>")
+    if start != -1 and end != -1:
+        title_raw = raw[start + 7:end] if isinstance(raw, str) else raw.decode(errors="replace")[start + 7:end]
+        title = title_raw.strip()
+
+    return title, result or ""
+
+
+# --- Truncation ---
+
+
+def truncate_at_paragraph(text: str, *, max_length: int) -> str:
+    """Truncate text at paragraph boundaries. max_length=0 disables truncation."""
+    if max_length == 0 or len(text) <= max_length:
+        return text
+
+    paragraphs = text.split("\n\n")
+    result: list[str] = []
+    current_length = 0
+
+    for para in paragraphs:
+        addition = len(para) + (2 if result else 0)
+        if current_length + addition > max_length and result:
+            break
+        result.append(para)
+        current_length += addition
+
+    return "\n\n".join(result)
