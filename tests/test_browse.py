@@ -14,16 +14,9 @@ from scout.browse import (
     _check_resolved_ip,
     http_fetch,
     _is_bot_blocked,
+    extract_content,
+    truncate_at_paragraph,
 )
-
-# Deferred imports for functions added by parallel tasks
-def _import_extract_content():
-    from scout.browse import extract_content
-    return extract_content
-
-def _import_truncate():
-    from scout.browse import truncate_at_paragraph
-    return truncate_at_paragraph
 
 
 class TestSSRFRequestHook:
@@ -173,7 +166,6 @@ class TestKeywordExtract:
 class TestExtractContent:
     @pytest.mark.asyncio
     async def test_extracts_main_content(self):
-        extract_content = _import_extract_content()
         html = """<html><head><title>Test</title></head>
         <body><nav>Menu</nav><main><h1>Title</h1><p>Real content here.</p></main>
         <footer>Copyright</footer></body></html>"""
@@ -183,13 +175,11 @@ class TestExtractContent:
 
     @pytest.mark.asyncio
     async def test_returns_empty_on_blank_html(self):
-        extract_content = _import_extract_content()
         title, content = await extract_content("<html><body></body></html>")
         assert content == ""
 
     @pytest.mark.asyncio
     async def test_skips_nav_and_footer(self):
-        extract_content = _import_extract_content()
         html = """<html><head><title>T</title></head><body>
         <nav>Navigation</nav><p>Article text</p><footer>Footer</footer></body></html>"""
         title, content = await extract_content(html)
@@ -197,37 +187,31 @@ class TestExtractContent:
 
     @pytest.mark.asyncio
     async def test_json_passthrough(self):
-        extract_content = _import_extract_content()
         title, content = await extract_content('{"key": "value"}', content_type="application/json")
         assert '"key"' in content
         assert '"value"' in content
 
     @pytest.mark.asyncio
     async def test_plain_text_passthrough(self):
-        extract_content = _import_extract_content()
         title, content = await extract_content("Just plain text.", content_type="text/plain")
         assert content == "Just plain text."
 
 
 class TestTruncation:
     def test_no_truncation_when_under_limit(self):
-        truncate_at_paragraph = _import_truncate()
         text = "Short text."
         assert truncate_at_paragraph(text, max_length=1000) == text
 
     def test_truncates_at_paragraph_boundary(self):
-        truncate_at_paragraph = _import_truncate()
         text = "First paragraph.\n\nSecond paragraph.\n\nThird paragraph."
         result = truncate_at_paragraph(text, max_length=30)
         assert result == "First paragraph."
 
     def test_zero_disables_truncation(self):
-        truncate_at_paragraph = _import_truncate()
         text = "A" * 10000
         assert truncate_at_paragraph(text, max_length=0) == text
 
     def test_never_truncates_mid_sentence(self):
-        truncate_at_paragraph = _import_truncate()
         text = "This is a long sentence that should not be cut in half."
         result = truncate_at_paragraph(text, max_length=20)
         assert result == text
