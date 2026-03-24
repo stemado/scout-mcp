@@ -38,6 +38,7 @@ from .models import (
 )
 from .browse import browse as browse_page
 from .sanitize import sanitize_response
+from .tokencount import count_tokens
 from .scout import build_element_summary, filter_elements, scout_page
 from .security import (
     log_security_event,
@@ -55,6 +56,14 @@ MAX_WAIT_MS = 60_000        # 1 minute
 MAX_TIMEOUT_MS = 300_000    # 5 minutes
 MAX_JS_TIMEOUT_S = 120      # 2 minutes — JS execution safety cap
 MAX_RESULTS = 500           # Scout JS caps at 500 elements
+
+
+def _track_response(response: str, tool: str, session: BrowserSession | None = None) -> str:
+    """Record token usage for a tool response, then return it unchanged."""
+    if session is not None:
+        session.history.record_response_tokens(tool, response)
+    return response
+
 
 # --- Session ID format ---
 
@@ -374,7 +383,8 @@ async def scout_page_tool(
     if detail_level == "full":
         data = report.model_dump(exclude_none=True)
         response = sanitize_response(data, secrets=session._secret_values)
-        return scan_and_warn(response, data, page_url, session.session_id, session.security_counter)
+        result = scan_and_warn(response, data, page_url, session.session_id, session.security_counter)
+        return _track_response(result, "scout_page", session)
 
     # Summary mode: return structure + counts, no element list
     element_summary = build_element_summary(report.interactive_elements)
@@ -386,7 +396,8 @@ async def scout_page_tool(
         "page_summary": report.page_summary,
     }
     response = sanitize_response(data, secrets=session._secret_values)
-    return scan_and_warn(response, data, page_url, session.session_id, session.security_counter)
+    result = scan_and_warn(response, data, page_url, session.session_id, session.security_counter)
+    return _track_response(result, "scout_page", session)
 
 
 # --- Tool: find_elements ---
@@ -479,7 +490,8 @@ async def find_elements(
     except Exception:
         pass
     response = sanitize_response(data, secrets=session._secret_values)
-    return scan_and_warn(response, data, page_url, session.session_id, session.security_counter)
+    result = scan_and_warn(response, data, page_url, session.session_id, session.security_counter)
+    return _track_response(result, "find_elements", session)
 
 
 # --- Tool: execute_action ---
@@ -537,7 +549,10 @@ async def execute_action_tool(
     else:
         await ctx.warning(f"Action failed: {result.error}")
 
-    return sanitize_response(result.model_dump(exclude_none=True), secrets=session._secret_values)
+    return _track_response(
+        sanitize_response(result.model_dump(exclude_none=True), secrets=session._secret_values),
+        "execute_action", session,
+    )
 
 
 # --- Tool: fill_secret ---
@@ -701,7 +716,10 @@ async def fill_secret(
     else:
         await ctx.warning(f"fill_secret failed: {error}")
 
-    return sanitize_response(result.model_dump(exclude_none=True), secrets=session._secret_values)
+    return _track_response(
+        sanitize_response(result.model_dump(exclude_none=True), secrets=session._secret_values),
+        "fill_secret", session,
+    )
 
 
 # --- Tool: execute_javascript ---
@@ -738,12 +756,12 @@ async def execute_javascript(
         # The thread may continue running — asyncio cannot kill threads.
         # But we unblock the server and return an error to the client.
         await ctx.warning(f"JS execution timed out after {MAX_JS_TIMEOUT_S}s")
-        return sanitize_response({
+        return _track_response(sanitize_response({
             "success": False,
             "error": f"Execution timed out after {MAX_JS_TIMEOUT_S}s. "
                      "The script may still be running in the browser.",
             "elapsed_ms": MAX_JS_TIMEOUT_S * 1000,
-        }, secrets=session._secret_values)
+        }, secrets=session._secret_values), "execute_javascript", session)
 
     session.history.record_javascript(record)
 
@@ -777,7 +795,7 @@ async def execute_javascript(
     )
 
     response = sanitize_response(result.model_dump(exclude_none=True), secrets=session._secret_values)
-    return scope_block + response
+    return _track_response(scope_block + response, "execute_javascript", session)
 
 
 # --- Tool: take_screenshot ---
@@ -869,10 +887,17 @@ async def take_screenshot_tool(
         await ctx.warning(f"Failed to save screenshot to disk: {e}")
 
     # Return metadata as text; optionally include image inline for visual display
-    content = [TextContent(type="text", text=json.dumps(result.model_dump(exclude_none=True)))]
+    meta_json = json.dumps(result.model_dump(exclude_none=True))
+    content = [TextContent(type="text", text=meta_json)]
     if return_image:
         mime = f"image/{format}"
         content.append(ImageContent(type="image", data=base64.b64encode(raw_bytes).decode(), mimeType=mime))
+    # Track tokens: text metadata + estimated image tokens when inline
+    session.history.record_response_tokens("take_screenshot", meta_json)
+    if return_image:
+        # Vision models use ~1,600 tokens per standard-resolution image.
+        # Record as a separate entry so text vs image costs are visible.
+        session.history.record_image_tokens("take_screenshot_image", 1_600, len(raw_bytes))
     return CallToolResult(content=content)
 
 
@@ -928,7 +953,8 @@ async def inspect_element_tool(
     except Exception:
         pass
     response = sanitize_response(data, secrets=session._secret_values)
-    return scan_and_warn(response, data, page_url, session.session_id, session.security_counter)
+    result = scan_and_warn(response, data, page_url, session.session_id, session.security_counter)
+    return _track_response(result, "inspect_element", session)
 
 
 # --- Tool: process_download ---
@@ -978,7 +1004,10 @@ async def process_download(
     else:
         await ctx.warning(f"Processing failed: {result.error}")
 
-    return sanitize_response(result.model_dump(exclude_none=True), secrets=session._secret_values)
+    return _track_response(
+        sanitize_response(result.model_dump(exclude_none=True), secrets=session._secret_values),
+        "process_download", session,
+    )
 
 
 # --- Tool: get_session_history ---
@@ -1122,7 +1151,10 @@ async def monitor_network(
                 if scrubbed_count > 0:
                     monitor_data["scrubbed_fields"] = scrubbed_count
 
-            return sanitize_response(monitor_data, secrets=session._secret_values)
+            return _track_response(
+                sanitize_response(monitor_data, secrets=session._secret_values),
+                "monitor_network", session,
+            )
 
         case "wait_for_download":
             await ctx.info(f"Waiting for download (timeout: {timeout_ms}ms)...")
@@ -1130,17 +1162,20 @@ async def monitor_network(
                 session.download_manager.wait_for_download, timeout_ms
             )
             if download_event:
-                return sanitize_response(
-                    download_event.model_dump(exclude_none=True),
-                    secrets=session._secret_values,
+                return _track_response(
+                    sanitize_response(
+                        download_event.model_dump(exclude_none=True),
+                        secrets=session._secret_values,
+                    ),
+                    "monitor_network", session,
                 )
             # Fallback to network monitor's header-based detection
             download_events = await asyncio.to_thread(monitor.wait_for_download, timeout_ms)
-            return sanitize_response(MonitorResult(
+            return _track_response(sanitize_response(MonitorResult(
                 events=download_events,
                 total_captured=len(monitor.events),
                 monitoring_active=monitor.monitoring,
-            ).model_dump(exclude_none=True), secrets=session._secret_values)
+            ).model_dump(exclude_none=True), secrets=session._secret_values), "monitor_network", session)
 
         case _:
             return {"error": f"Unknown command: {command}"}

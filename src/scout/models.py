@@ -289,6 +289,23 @@ class ElementInspection(BaseModel):
     error: str | None = Field(default=None)
 
 
+class TokenUsageRecord(BaseModel):
+    """Token count for a single MCP tool response."""
+
+    tool: str = Field(description="Tool name that produced the response")
+    tokens: int = Field(description="Approximate token count (cl100k_base encoding)")
+    chars: int = Field(default=0, description="Character count of the response")
+    timestamp: str = ""
+
+
+class TokenUsageSummary(BaseModel):
+    """Aggregate token usage for a session."""
+
+    total_tokens: int = 0
+    total_responses: int = 0
+    by_tool: dict[str, int] = Field(default_factory=dict, description="Token totals per tool")
+
+
 class SessionHistory(BaseModel):
     """Complete structured history of a browser session."""
 
@@ -303,6 +320,8 @@ class SessionHistory(BaseModel):
     recordings: list[RecordingRecord] = Field(default_factory=list)
     network_events: list[NetworkEvent] = Field(default_factory=list)
     navigations: list[dict] = Field(default_factory=list, description="List of {url, timestamp}")
+    token_usage: list[TokenUsageRecord] = Field(default_factory=list)
+    token_summary: TokenUsageSummary | None = None
 
 
 class SessionCloseResult(BaseModel):

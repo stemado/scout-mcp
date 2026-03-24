@@ -14,8 +14,11 @@ from .models import (
     ScoutSummaryRecord,
     ScreenshotRecord,
     SessionHistory,
+    TokenUsageRecord,
+    TokenUsageSummary,
 )
 from .scout import build_element_summary
+from .tokencount import count_tokens
 
 # Maximum list sizes before FIFO eviction
 MAX_ACTIONS = 10_000
@@ -26,6 +29,7 @@ MAX_FIND_ELEMENTS = 5_000
 MAX_NAVIGATIONS = 5_000
 MAX_NETWORK_EVENTS = 5_000
 MAX_RECORDINGS = 100
+MAX_TOKEN_RECORDS = 10_000
 
 
 class SessionHistoryTracker:
@@ -43,6 +47,9 @@ class SessionHistoryTracker:
         self.recordings: list[RecordingRecord] = []
         self.network_events: list[NetworkEvent] = []
         self.navigations: list[dict] = []
+        self.token_usage: list[TokenUsageRecord] = []
+        self._token_totals: dict[str, int] = {}  # tool -> cumulative tokens
+        self._total_tokens: int = 0
         # Monotonic cursor for syncing from NetworkMonitor — independent of FIFO eviction.
         # len(network_events) plateaus at MAX_NETWORK_EVENTS, but this counter never decreases.
         self._network_sync_cursor: int = 0
@@ -106,6 +113,43 @@ class SessionHistoryTracker:
             self.recordings.pop(0)
         self.recordings.append(record)
 
+    def record_response_tokens(self, tool: str, response_text: str) -> int:
+        """Count tokens in a response string and record it. Returns the token count."""
+        tokens = count_tokens(response_text)
+        chars = len(response_text)
+        if len(self.token_usage) >= MAX_TOKEN_RECORDS:
+            self.token_usage.pop(0)
+        self.token_usage.append(TokenUsageRecord(
+            tool=tool,
+            tokens=tokens,
+            chars=chars,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+        ))
+        self._total_tokens += tokens
+        self._token_totals[tool] = self._token_totals.get(tool, 0) + tokens
+        return tokens
+
+    def record_image_tokens(self, tool: str, tokens: int, byte_size: int) -> None:
+        """Record estimated image token cost (e.g. for screenshots sent inline)."""
+        if len(self.token_usage) >= MAX_TOKEN_RECORDS:
+            self.token_usage.pop(0)
+        self.token_usage.append(TokenUsageRecord(
+            tool=tool,
+            tokens=tokens,
+            chars=byte_size,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+        ))
+        self._total_tokens += tokens
+        self._token_totals[tool] = self._token_totals.get(tool, 0) + tokens
+
+    def get_token_summary(self) -> TokenUsageSummary:
+        """Return aggregate token usage for this session."""
+        return TokenUsageSummary(
+            total_tokens=self._total_tokens,
+            total_responses=len(self.token_usage),
+            by_tool=dict(self._token_totals),
+        )
+
     def get_full_history(self) -> SessionHistory:
         return SessionHistory(
             session_id=self.session_id,
@@ -119,4 +163,6 @@ class SessionHistoryTracker:
             recordings=self.recordings,
             network_events=self.network_events,
             navigations=self.navigations,
+            token_usage=self.token_usage,
+            token_summary=self.get_token_summary(),
         )
