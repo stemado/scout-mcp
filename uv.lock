@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = ">=3.11"
 
 [[package]]
@@ -1284,7 +1284,7 @@ wheels = [
 
 [[package]]
 name = "scout-mcp-server"
-version = "1.8.0"
+version = "1.8.1"
 source = { editable = "." }
 dependencies = [
     { name = "botasaurus-driver" },
