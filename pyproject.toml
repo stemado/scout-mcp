@@ -32,6 +32,9 @@ dependencies = [
     "tiktoken>=0.7.0",
 ]
 
+[project.optional-dependencies]
+vault = ["secret-vault>=0.1.0"]
+
 [project.scripts]
 scout-mcp-server = "scout.server:main"
 

@@ -81,6 +81,7 @@ class AppContext:
     max_sessions: int = 1
     _launch_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     _env_vars: dict[str, str] | None = field(default=None)
+    _vault_resolver: object | None = field(default=None)  # CredentialResolver when active
     _extension_relay: object | None = field(default=None)  # ExtensionRelay when active
     _closed_histories: dict[str, str] = field(default_factory=dict)
     _max_closed_histories: int = 5
@@ -98,6 +99,11 @@ async def app_lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
                 session.close()
             except Exception:
                 pass
+        if ctx._vault_resolver is not None:
+            try:
+                ctx._vault_resolver.close()
+            except Exception:
+                pass
 
     atexit.register(_cleanup_sync)
 
@@ -110,6 +116,13 @@ async def app_lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
                 await asyncio.to_thread(session.close)
             except Exception:
                 pass
+        # Clean up vault resolver
+        if ctx._vault_resolver is not None:
+            try:
+                ctx._vault_resolver.close()
+            except Exception:
+                pass
+            ctx._vault_resolver = None
         # Clean up extension relay server
         if ctx._extension_relay is not None:
             try:
@@ -149,6 +162,54 @@ def _get_env_vars(app_ctx: AppContext) -> dict[str, str]:
         from .secrets import load_env_vars
         app_ctx._env_vars = load_env_vars()
     return app_ctx._env_vars
+
+
+def _get_credential(name: str, app_ctx: AppContext) -> str | None:
+    """Resolve a credential: vault first, then .env fallback.
+
+    Returns None if the credential is not found in either source.
+    Users without secret-vault installed see identical .env-only behavior.
+    """
+    # 1. Try vault (if secret-vault is installed)
+    try:
+        from secret_vault import CredentialResolver
+        if app_ctx._vault_resolver is None:
+            app_ctx._vault_resolver = CredentialResolver(interactive=False)
+        return app_ctx._vault_resolver.get(name)
+    except ImportError:
+        pass  # secret-vault not installed
+    except KeyError:
+        pass  # Not in vault or .env via resolver
+    except Exception:
+        pass  # Vault unavailable — fall through
+
+    # 2. Fall back to .env (existing behavior)
+    try:
+        env_vars = _get_env_vars(app_ctx)
+        return env_vars.get(name)
+    except Exception:
+        return None
+
+
+def _list_credential_names(app_ctx: AppContext) -> set[str]:
+    """Merge vault names + .env keys for scrubbing/discovery."""
+    names: set[str] = set()
+    try:
+        from secret_vault import CredentialResolver
+        if app_ctx._vault_resolver is None:
+            app_ctx._vault_resolver = CredentialResolver(interactive=False)
+        resolver = app_ctx._vault_resolver
+        if hasattr(resolver, '_vault') and resolver._vault is not None:
+            names.update(resolver._vault.list_names())
+        if hasattr(resolver, '_env_vars') and resolver._env_vars is not None:
+            names.update(resolver._env_vars.keys())
+    except (ImportError, Exception):
+        pass
+    try:
+        names.update(_get_env_vars(app_ctx).keys())
+    except Exception:
+        pass
+    return names
 
 
 # --- Tool: launch_session ---
@@ -631,18 +692,17 @@ async def fill_secret(
             "allowed_domains in launch_session to restrict credential usage."
         )
 
-    # Load the secret value server-side from .env
+    # Load the secret value server-side from vault or .env
     scrub_warning: str | None = None
     try:
-        env_vars = _get_env_vars(app_ctx)
-        if env_var not in env_vars:
+        secret_value = _get_credential(env_var, app_ctx)
+        if secret_value is None:
             raise KeyError(env_var)
-        secret_value = env_vars[env_var]
         scrub_warning = session.register_secret(secret_value)
     except KeyError:
         return FillSecretResult(
             success=False, env_var=env_var, selector=selector,
-            error=f"Variable '{env_var}' not found in .env file.",
+            error=f"Credential '{env_var}' not found in vault or .env file.",
         ).model_dump(exclude_none=True)
     except Exception as e:
         return FillSecretResult(
@@ -1125,9 +1185,15 @@ async def monitor_network(
             env_keys: set[str] | None = None
             env_values: dict[str, str] | None = None
             try:
-                env_data = _get_env_vars(app_ctx)
-                env_keys = set(env_data.keys())
-                env_values = env_data
+                all_names = _list_credential_names(app_ctx)
+                env_keys = all_names if all_names else None
+                # Resolve all values for scrubbing
+                if env_keys:
+                    env_values = {}
+                    for key in env_keys:
+                        val = _get_credential(key, app_ctx)
+                        if val is not None:
+                            env_values[key] = val
             except Exception:
                 pass
 
@@ -1366,14 +1432,20 @@ async def get_2fa_code(
     app_ctx = _get_ctx(ctx)
 
     try:
-        env_vars = _get_env_vars(app_ctx)
-        account_sid = env_vars["TWILIO_ACCOUNT_SID"]
-        auth_token = env_vars["TWILIO_AUTH_TOKEN"]
-        phone_number = env_vars["TWILIO_PHONE_NUMBER"]
+        account_sid = _get_credential("TWILIO_ACCOUNT_SID", app_ctx)
+        auth_token = _get_credential("TWILIO_AUTH_TOKEN", app_ctx)
+        phone_number = _get_credential("TWILIO_PHONE_NUMBER", app_ctx)
+        if not all([account_sid, auth_token, phone_number]):
+            missing = [k for k, v in [
+                ("TWILIO_ACCOUNT_SID", account_sid),
+                ("TWILIO_AUTH_TOKEN", auth_token),
+                ("TWILIO_PHONE_NUMBER", phone_number),
+            ] if not v]
+            raise KeyError(", ".join(missing))
     except KeyError as exc:
         raise ValueError(
             f"Missing Twilio credential: {exc}. "
-            "Add TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER to your .env file."
+            "Add TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER to your vault or .env file."
         ) from exc
 
     return await poll_for_otp(

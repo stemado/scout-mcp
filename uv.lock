@@ -708,6 +708,18 @@ wheels = [
 ]
 
 [[package]]
+name = "pyaescrypt"
+version = "6.1.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "cryptography" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/29/17/59bdb5f36bcf376d11ea16f5d1b4113b783a3ff0b201ff34cec91f836bde/pyAesCrypt-6.1.1.tar.gz", hash = "sha256:6bf8f97c03ec0e42008da911ac25e523f11f160f684d5f2bc9579ce501be9eae", size = 14752, upload-time = "2023-11-11T11:14:20.37Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e9/b0/7ec8433044d6e178fb6cc5e559d8027dad72f6d6b17b56e955013413ba21/pyAesCrypt-6.1.1-py3-none-any.whl", hash = "sha256:302ac75aa76d70e3e42c56c445e2581e24fabac7ae2e309deb7b8b2c6da95e39", size = 16037, upload-time = "2023-11-11T11:14:18.701Z" },
+]
+
+[[package]]
 name = "pycparser"
 version = "3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1300,6 +1312,11 @@ dependencies = [
     { name = "websockets" },
 ]
 
+[package.optional-dependencies]
+vault = [
+    { name = "secret-vault" },
+]
+
 [package.dev-dependencies]
 dev = [
     { name = "pytest" },
@@ -1315,17 +1332,29 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "pyyaml", specifier = ">=6.0" },
+    { name = "secret-vault", marker = "extra == 'vault'", specifier = ">=0.1.0" },
     { name = "tiktoken", specifier = ">=0.7.0" },
     { name = "tldextract", specifier = ">=5.3.1" },
     { name = "trafilatura", specifier = ">=1.6.0" },
     { name = "websockets", specifier = ">=13.0" },
 ]
+provides-extras = ["vault"]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "pytest-asyncio", specifier = ">=1.0.0" },
 ]
+
+[[package]]
+name = "secret-vault"
+version = "1.1.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "cryptography" },
+    { name = "pyaescrypt" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8d/96/28eeb2c6202ba199ab94d62fe2dcd4e0e9785b81ac3632cba09cb44996ee/secret_vault-1.1.2.tar.gz", hash = "sha256:8c0681323a7bcf7d37e98547e86f76c15f140cf1e8eaf9a2542d4b89b5e1f1a5", size = 4067, upload-time = "2021-05-22T13:43:45.556Z" }
 
 [[package]]
 name = "shellingham"
