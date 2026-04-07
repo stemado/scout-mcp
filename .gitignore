@@ -17,3 +17,4 @@ release-scout-mcp/
 video/out/
 video/node_modules/
 .visualizer/
+workflows/
